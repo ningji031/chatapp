@@ -1307,7 +1307,7 @@ async function apOpenPerm(userId, username) {
   document.getElementById('ap-perm-modal').classList.add('show');
   try {
     const [user, rooms] = await Promise.all([
-      api('/api/admin/users', 'GET').then(users => users.find(u => u.id === userId)),
+      api('/api/admin/users', 'GET').then(users => users.find(u => u.id == userId)),
       api('/api/admin/rooms', 'GET')
     ]);
     const mutedRooms = user?.mutedRooms || [];
@@ -1373,7 +1373,7 @@ function showUserActionPopup(userId, username, event) {
 
   // 读取当前用户状态
   api('/api/admin/users', 'GET').then(users => {
-    const u = users.find(x => x.id === userId);
+    const u = users.find(x => x.id == userId);
     if (!u) return;
     const mutedRooms = u.mutedRooms || [];
     const bannedRooms = u.bannedRooms || [];
@@ -1428,7 +1428,7 @@ async function uaToggleMute() {
   const rid = currentChat.id;
   try {
     const users = await api('/api/admin/users', 'GET');
-    const u = users.find(x => x.id === uaTargetUserId);
+    const u = users.find(x => x.id == uaTargetUserId);
     const mutedRooms = u?.mutedRooms || [];
     const isMuted = mutedRooms.includes(rid);
     await api(`/api/admin/users/${uaTargetUserId}/mute`, 'PUT', { roomId: rid, muted: !isMuted });
@@ -1449,7 +1449,7 @@ async function uaToggleBan() {
   const rid = currentChat.id;
   try {
     const users = await api('/api/admin/users', 'GET');
-    const u = users.find(x => x.id === uaTargetUserId);
+    const u = users.find(x => x.id == uaTargetUserId);
     const bannedRooms = u?.bannedRooms || [];
     const isBanned = bannedRooms.includes(rid);
     await api(`/api/admin/users/${uaTargetUserId}/ban`, 'PUT', { roomId: rid, banned: !isBanned });

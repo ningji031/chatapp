@@ -398,7 +398,7 @@ async function openMuteModal(userId, username) {
 
   try {
     const [user, rooms] = await Promise.all([
-      api('/api/admin/users', 'GET').then(users => users.find(u => u.id === userId)),
+      api('/api/admin/users', 'GET').then(users => users.find(u => u.id == userId)),
       api('/api/admin/rooms', 'GET')
     ]);
     const mutedRooms = user?.mutedRooms || [];
@@ -437,7 +437,7 @@ async function toggleMuteRoom(userId, roomId, currentMuted) {
     await api(`/api/admin/users/${userId}/mute`, 'PUT', { roomId, muted: !currentMuted });
     showToast('✅ 禁言状态已更新');
     // 刷新模态框
-    const user = (await api('/api/admin/users', 'GET')).find(u => u.id === userId);
+    const user = (await api('/api/admin/users', 'GET')).find(u => u.id == userId);
     openMuteModal(userId, user?.username || '');
   } catch(e) {
     showToast('❌ ' + e.message);
@@ -448,7 +448,7 @@ async function toggleBanRoom(userId, roomId, currentBanned) {
   try {
     await api(`/api/admin/users/${userId}/ban`, 'PUT', { roomId, banned: !currentBanned });
     showToast('✅ 封禁状态已更新');
-    const user = (await api('/api/admin/users', 'GET')).find(u => u.id === userId);
+    const user = (await api('/api/admin/users', 'GET')).find(u => u.id == userId);
     openMuteModal(userId, user?.username || '');
   } catch(e) {
     showToast('❌ ' + e.message);
