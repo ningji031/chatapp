@@ -4,9 +4,10 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const Database = require('better-sqlite3');
+const initSqlJs = require('sql.js');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -22,69 +23,98 @@ const clientPath = path.join(__dirname, 'client');
 app.use(express.static(clientPath));
 app.get('/', (req, res) => res.sendFile(path.join(clientPath, 'index.html')));
 
-// ─── SQLite 初始化 ──────────────────────────────────────────────
+// ─── sql.js 初始化 ──────────────────────────────────────────────
+let db;
 const dbPath = path.join(__dirname, 'chat.db');
-const db = new Database(dbPath);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    avatar TEXT DEFAULT '',
-    created_at INTEGER DEFAULT (strftime('%s','now'))
-  );
+(async () => {
+  const SQL = await initSqlJs();
+  try {
+    const filebuffer = fs.readFileSync(dbPath);
+    db = new SQL.Database(filebuffer);
+  } catch {
+    db = new SQL.Database();
+  }
 
-  CREATE TABLE IF NOT EXISTS rooms (
-    id TEXT PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
-    description TEXT DEFAULT '',
-    created_by TEXT,
-    created_at INTEGER DEFAULT (strftime('%s','now'))
-  );
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      avatar TEXT DEFAULT '',
+      created_at INTEGER DEFAULT (strftime('%s','now'))
+    );
 
-  CREATE TABLE IF NOT EXISTS messages (
-    id TEXT PRIMARY KEY,
-    room_id TEXT,
-    sender_id TEXT NOT NULL,
-    sender_name TEXT NOT NULL,
-    content TEXT NOT NULL,
-    type TEXT DEFAULT 'text',
-    created_at INTEGER DEFAULT (strftime('%s','now'))
-  );
+    CREATE TABLE IF NOT EXISTS rooms (
+      id TEXT PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      description TEXT DEFAULT '',
+      created_by TEXT,
+      created_at INTEGER DEFAULT (strftime('%s','now'))
+    );
 
-  CREATE TABLE IF NOT EXISTS private_messages (
-    id TEXT PRIMARY KEY,
-    from_id TEXT NOT NULL,
-    to_id TEXT NOT NULL,
-    content TEXT NOT NULL,
-    type TEXT DEFAULT 'text',
-    read INTEGER DEFAULT 0,
-    created_at INTEGER DEFAULT (strftime('%s','now'))
-  );
-`);
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      room_id TEXT,
+      sender_id TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      type TEXT DEFAULT 'text',
+      created_at INTEGER DEFAULT (strftime('%s','now'))
+    );
 
-// 创建默认聊天室
-const defaultRooms = [
-  { id: 'general', name: '大厅',     desc: '欢迎来到聊天大厅！' },
-  { id: 'tech',    name: '技术交流', desc: '讨论技术话题' },
-  { id: 'random',  name: '闲聊水区', desc: '随便聊聊' }
-];
-const insertRoom = db.prepare(`INSERT OR IGNORE INTO rooms (id, name, description, created_by) VALUES (?, ?, ?, 'system')`);
-defaultRooms.forEach(r => insertRoom.run(r.id, r.name, r.desc));
+    CREATE TABLE IF NOT EXISTS private_messages (
+      id TEXT PRIMARY KEY,
+      from_id TEXT NOT NULL,
+      to_id TEXT NOT NULL,
+      content TEXT NOT NULL,
+      type TEXT DEFAULT 'text',
+      read INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s','now'))
+    );
+  `);
 
-// 预处理语句
-const stmts = {
-  getUserByUsername: db.prepare('SELECT * FROM users WHERE username = ?'),
-  getUserById:      db.prepare('SELECT id, username, avatar FROM users WHERE id = ?'),
-  insertUser:        db.prepare('INSERT INTO users (id, username, password, avatar) VALUES (?, ?, ?, ?)'),
-  insertMessage:     db.prepare('INSERT INTO messages (id, room_id, sender_id, sender_name, content, type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'),
-  insertPrivate:     db.prepare('INSERT INTO private_messages (id, from_id, to_id, content, type, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
-  getRoomMessages:   db.prepare('SELECT * FROM messages WHERE room_id = ? ORDER BY created_at DESC LIMIT 50'),
-  getPrivateMessages: db.prepare('SELECT * FROM private_messages WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?) ORDER BY created_at ASC LIMIT 100'),
-  getAllUsers:       db.prepare('SELECT id, username, avatar FROM users ORDER BY username ASC'),
-  getRooms:         db.prepare('SELECT id, name, description, created_at FROM rooms ORDER BY created_at ASC'),
-};
+  // 创建默认聊天室
+  const defaultRooms = [
+    { id: 'general', name: '大厅',     desc: '欢迎来到聊天大厅！' },
+    { id: 'tech',    name: '技术交流', desc: '讨论技术话题' },
+    { id: 'random',  name: '闲聊水区', desc: '随便聊聊' }
+  ];
+  defaultRooms.forEach(r => {
+    db.run(`INSERT OR IGNORE INTO rooms (id, name, description, created_by) VALUES (?, ?, ?, 'system')`, [r.id, r.name, r.desc]);
+  });
+
+  saveDb();
+})();
+
+function saveDb() {
+  const data = db.export();
+  fs.writeFileSync(dbPath, Buffer.from(data));
+}
+
+// Helper: 执行查询
+function run(sql, params = []) {
+  db.run(sql, params);
+  saveDb();
+}
+
+function get(sql, params = []) {
+  const stmt = db.prepare(sql);
+  const hasRow = stmt.step();
+  const result = hasRow ? stmt.getAsObject() : null;
+  stmt.free();
+  return result;
+}
+
+function all(sql, params = []) {
+  const stmt = db.prepare(sql);
+  const results = [];
+  while (stmt.step()) {
+    results.push(stmt.getAsObject());
+  }
+  stmt.free();
+  return results;
+}
 
 // ─── HTTP 路由 ──────────────────────────────────────────────────
 
@@ -94,12 +124,12 @@ app.post('/api/register', async (req, res) => {
   if (username.length < 2 || username.length > 20) return res.status(400).json({ error: '用户名长度 2~20 位' });
   if (password.length < 6) return res.status(400).json({ error: '密码至少 6 位' });
   try {
-    const existing = stmts.getUserByUsername.get(username);
+    const existing = get('SELECT * FROM users WHERE username = ?', [username]);
     if (existing) return res.status(400).json({ error: '用户名已被占用' });
     const hashed = await bcrypt.hash(password, 10);
     const id = uuidv4();
     const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
-    stmts.insertUser.run(id, username, hashed, avatar);
+    run('INSERT INTO users (id, username, password, avatar) VALUES (?, ?, ?, ?)', [id, username, hashed, avatar]);
     const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ token, user: { id, username, avatar } });
   } catch (e) {
@@ -110,7 +140,7 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  const user = stmts.getUserByUsername.get(username);
+  const user = get('SELECT * FROM users WHERE username = ?', [username]);
   if (!user) return res.status(401).json({ error: '用户名或密码错误' });
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.status(401).json({ error: '用户名或密码错误' });
@@ -122,17 +152,20 @@ app.post('/api/login', async (req, res) => {
 app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
 
 app.get('/api/rooms', (req, res) => {
-  res.json(stmts.getRooms.all());
+  res.json(all('SELECT id, name, description, created_at FROM rooms ORDER BY created_at ASC'));
 });
 
 app.get('/api/users', authMiddleware, (req, res) => {
-  res.json(stmts.getAllUsers.all());
+  res.json(all('SELECT id, username, avatar FROM users ORDER BY username ASC'));
 });
 
 app.get('/api/private/:userId', authMiddleware, (req, res) => {
   const me = req.user.id;
   const other = req.params.userId;
-  const msgs = stmts.getPrivateMessages.all(me, other, other, me);
+  const msgs = all(
+    'SELECT * FROM private_messages WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?) ORDER BY created_at ASC LIMIT 100',
+    [me, other, other, me]
+  );
   res.json(msgs);
 });
 
@@ -158,7 +191,7 @@ io.use((socket, next) => {
   if (!token) return next(new Error('未登录'));
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = stmts.getUserById.get(payload.id);
+    const user = get('SELECT id, username, avatar FROM users WHERE id = ?', [payload.id]);
     if (!user) return next(new Error('用户不存在'));
     socket.user = user;
     next();
@@ -175,7 +208,7 @@ io.on('connection', (socket) => {
 
   socket.on('join_room', (roomId) => {
     socket.join(roomId);
-    const msgs = stmts.getRoomMessages.all(roomId).reverse();
+    const msgs = all('SELECT * FROM messages WHERE room_id = ? ORDER BY created_at DESC LIMIT 50', [roomId]).reverse();
     socket.emit('room_history', { roomId, messages: msgs });
     socket.to(roomId).emit('system_message', { roomId, text: `${username} 加入了频道`, time: Date.now() });
   });
@@ -195,7 +228,8 @@ io.on('connection', (socket) => {
       type,
       created_at: Math.floor(Date.now() / 1000)
     };
-    stmts.insertMessage.run(msg.id, msg.room_id, msg.sender_id, msg.sender_name, msg.content, msg.type, msg.created_at);
+    run('INSERT INTO messages (id, room_id, sender_id, sender_name, content, type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [msg.id, msg.room_id, msg.sender_id, msg.sender_name, msg.content, msg.type, msg.created_at]);
     io.to(roomId).emit('new_message', msg);
   });
 
@@ -209,7 +243,8 @@ io.on('connection', (socket) => {
       type,
       created_at: Math.floor(Date.now() / 1000)
     };
-    stmts.insertPrivate.run(msg.id, msg.from_id, msg.to_id, msg.content, msg.type, msg.created_at);
+    run('INSERT INTO private_messages (id, from_id, to_id, content, type, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [msg.id, msg.from_id, msg.to_id, msg.content, msg.type, msg.created_at]);
     const target = [...onlineUsers.entries()].find(([, u]) => u.id === toUserId);
     if (target) io.to(target[0]).emit('new_private', msg);
     socket.emit('new_private', msg);
