@@ -90,16 +90,21 @@
     .modal-confirm { background: var(--danger); color: #fff; }
 
     .admin-tag { background: var(--primary); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 4px; }
-    .mute-modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 480px; width: 92vw; max-height: 80vh; overflow-y: auto; text-align: left; }
-    .mute-modal h3 { font-size: 16px; margin-bottom: 16px; }
-    .mute-room-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
-    .mute-room-item:last-child { border-bottom: none; }
-    .mute-room-name { font-size: 14px; font-weight: 600; }
-    .mute-room-id { font-size: 11px; color: var(--text-muted); font-family: monospace; }
-    .toggle-group { display: flex; gap: 8px; align-items: center; }
-    .toggle-btn { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: all 0.15s; }
-    .toggle-btn.active-mute { background: rgba(255,92,92,0.12); color: var(--danger); border-color: rgba(255,92,92,0.3); }
-    .toggle-btn.active-ban { background: rgba(255,152,0,0.12); color: var(--warning); border-color: rgba(255,152,0,0.3); }
+    .mute-modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 520px; width: 92vw; max-height: 80vh; overflow-y: auto; text-align: left; }
+    .mute-modal h3 { font-size: 16px; margin-bottom: 6px; }
+    .mute-modal .hint { font-size: 12px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.6; }
+    .perm-section { margin-bottom: 14px; }
+    .perm-section-title { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px; }
+    .perm-room-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; transition: background 0.1s; }
+    .perm-room-item:hover { background: #f8f8fc; }
+    .perm-room-info { display: flex; flex-direction: column; gap: 1px; }
+    .perm-room-name { font-size: 14px; font-weight: 600; }
+    .perm-room-desc { font-size: 11px; color: var(--text-muted); }
+    .perm-toggles { display: flex; gap: 6px; align-items: center; }
+    .toggle-btn { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: all 0.15s; font-weight: 500; }
+    .toggle-btn.active-mute { background: rgba(255,92,92,0.15); color: var(--danger); border-color: rgba(255,92,92,0.4); }
+    .toggle-btn.active-ban  { background: rgba(255,152,0,0.15); color: var(--warning); border-color: rgba(255,152,0,0.4); }
+    .perm-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -207,6 +212,10 @@
 <div class="modal-overlay" id="mute-modal">
   <div class="mute-modal">
     <h3 id="mute-modal-title">频道权限管理</h3>
+    <p class="hint">
+      🔇 <b>禁止发言</b>：用户可进入频道，但无法发送消息（会收到提示）<br>
+      🚫 <b>禁止进入</b>：用户无法进入该频道（不影响登录和其他频道）
+    </p>
     <div id="mute-room-list"></div>
     <div style="text-align:center;margin-top:18px;">
       <button class="btn-sm btn-success" onclick="closeMuteModal()" style="padding:7px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;">关闭</button>
@@ -395,24 +404,29 @@ async function openMuteModal(userId, username) {
     const mutedRooms = user?.mutedRooms || [];
     const bannedRooms = user?.bannedRooms || [];
 
-    document.getElementById('mute-room-list').innerHTML = rooms.map(r => `
-      <div class="mute-room-item">
-        <div>
-          <div class="mute-room-name">${escHtml(r.name)}</div>
-          <div class="mute-room-id"><code>${escHtml(r.id)}</code></div>
+    document.getElementById('mute-room-list').innerHTML = rooms.map(r => {
+      const isMuted = mutedRooms.includes(r.id);
+      const isBanned = bannedRooms.includes(r.id);
+      return `
+      <div class="perm-room-item">
+        <div class="perm-room-info">
+          <span class="perm-room-name">${escHtml(r.name)}</span>
+          <span class="perm-room-desc">${escHtml(r.description || '')} <code>${escHtml(r.id)}</code></span>
         </div>
-        <div class="toggle-group">
-          <button class="toggle-btn ${mutedRooms.includes(r.id) ? 'active-mute' : ''}"
-            onclick="toggleMuteRoom('${userId}','${r.id}', ${mutedRooms.includes(r.id)})">
-            ${mutedRooms.includes(r.id) ? '已禁言' : '未禁言'}
+        <div class="perm-toggles">
+          <button class="toggle-btn ${isMuted ? 'active-mute' : ''}"
+            onclick="toggleMuteRoom('${userId}','${r.id}', ${isMuted})"
+            title="禁止该用户在此频道发送消息">
+            ${isMuted ? '🚫 禁止发言' : '✅ 允许发言'}
           </button>
-          <button class="toggle-btn ${bannedRooms.includes(r.id) ? 'active-ban' : ''}"
-            onclick="toggleBanRoom('${userId}','${r.id}', ${bannedRooms.includes(r.id)})">
-            ${bannedRooms.includes(r.id) ? '已封禁' : '未封禁'}
+          <button class="toggle-btn ${isBanned ? 'active-ban' : ''}"
+            onclick="toggleBanRoom('${userId}','${r.id}', ${isBanned})"
+            title="禁止该用户进入此频道">
+            ${isBanned ? '🚪 禁止进入' : '✅ 允许进入'}
           </button>
         </div>
       </div>
-    `).join('');
+    `}).join('');
   } catch(e) {
     showToast('❌ ' + e.message);
   }
