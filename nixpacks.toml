@@ -1,3 +1,7 @@
+[phases.setup]
+aptPkgs = ["python3", "make", "g++"]
+nixPkgs = ["nodejs_20"]
+
 [phases.install]
 cmds = ["npm install"]
 
