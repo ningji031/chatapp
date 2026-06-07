@@ -80,9 +80,22 @@ const memPrivateMessages = [];
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
+// 禁止浏览器缓存 HTML 页面
+app.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+
 const clientPath = path.join(__dirname, 'client');
-app.use(express.static(clientPath));
-app.get('/', (req, res) => res.sendFile(path.join(clientPath, 'index.html')));
+app.use(express.static(clientPath, { etag: false, lastModified: false }));
+app.get('/', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(clientPath, 'index.html'));
+});
 
 // 健康检查
 app.get('/health', (_req, res) => {
