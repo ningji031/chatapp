@@ -259,7 +259,6 @@ function showAdminPage() {
   document.getElementById('admin-page').style.display = 'block';
 }
 
-// ── API 封装
 async function api(path, method, body) {
   const opts = {
     method,
@@ -267,6 +266,12 @@ async function api(path, method, body) {
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
+  if (res.status === 401) {
+    // Token 过期或无效，清除并刷新到登录页
+    localStorage.removeItem('adm_token');
+    location.reload();
+    return;
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || '请求失败');
   return data;
