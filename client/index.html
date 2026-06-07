@@ -244,6 +244,36 @@
     }
     .btn-logout:hover { background: var(--danger); color: #fff; }
 
+    /* 用户操作弹窗（管理员） */
+    .user-action-popup {
+      display: none; position: fixed; z-index: 3000;
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      padding: 6px 0; min-width: 160px;
+      font-size: 13px; overflow: hidden;
+    }
+    .user-action-popup.show { display: block; }
+    .user-action-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 16px; cursor: pointer; transition: background 0.1s;
+      white-space: nowrap;
+    }
+    .user-action-item:hover { background: var(--bg); }
+    .user-action-item.danger { color: var(--danger); }
+    .user-action-item.warn   { color: var(--warning); }
+    .user-action-item.muted  { color: var(--danger); font-weight: 600; }
+    .user-action-item.banned { color: var(--warning); font-weight: 600; }
+    .user-action-sep { height: 1px; background: var(--border); margin: 4px 0; }
+    .user-action-hint { font-size: 11px; color: var(--text-muted); padding: 6px 16px 2px; }
+    .ua-trigger {
+      margin-left: auto; font-size: 16px; cursor: pointer;
+      color: var(--text-muted); padding: 0 6px; flex-shrink: 0;
+      border-radius: 4px; line-height: 1; user-select: none;
+      display: none;
+    }
+    .sidebar-item:hover .ua-trigger { display: inline-block; }
+    .ua-trigger:hover { background: var(--border); color: var(--text); }
+
     /* 管理员徽章 */
     .admin-badge {
       display: inline-flex; align-items: center; justify-content: center;
@@ -624,6 +654,24 @@
   </div>
 </div>
 
+<!-- 用户快捷操作弹窗（管理员） -->
+<div class="user-action-popup" id="user-action-popup">
+  <div class="user-action-hint" id="ua-hint">当前频道操作</div>
+  <div class="user-action-item" id="ua-mute" onclick="uaToggleMute()">
+    🔇 禁止发言
+  </div>
+  <div class="user-action-item" id="ua-ban" onclick="uaToggleBan()">
+    🚫 禁止进入
+  </div>
+  <div class="user-action-sep"></div>
+  <div class="user-action-item" onclick="uaOpenAllPerm()">
+    🔧 全部权限管理
+  </div>
+  <div class="user-action-item" onclick="uaOpenPrivate()">
+    💬 发起私聊
+  </div>
+</div>
+
 <!-- Socket.io 客户端（从后端服务获取） -->
 <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -755,6 +803,7 @@ function renderRooms() {
 
 function renderUsers() {
   const el = document.getElementById('users-list');
+  const isAdmin = (currentUser.is_admin||0);
   el.innerHTML = allUsers
     .filter(u => u.id !== currentUser.id)
     // 管理员排最前
@@ -764,11 +813,24 @@ function renderUsers() {
       const key = `private_${u.id}`;
       const unread = unreadMap[key] || 0;
       const adminBadge = (u.is_admin||0) ? '<span class="admin-badge">管理员</span>' : '';
+      const mutedRooms = u.mutedRooms || [];
+      const bannedRooms = u.bannedRooms || [];
+      const isMuted = currentChat?.type==='room' && mutedRooms.includes(currentChat.id);
+      const isBanned = currentChat?.type==='room' && bannedRooms.includes(currentChat.id);
+      // 管理员看到的操作按钮
+      const adminActions = isAdmin ? `
+        <span class="ua-trigger" title="管理此用户" onclick="event.stopPropagation();showUserActionPopup('${u.id}','${escHtml(u.username)}', event)">⋮</span>
+      ` : '';
+      // 禁言/封禁状态小圆点
+      let statusDots = '';
+      if (isMuted) statusDots += '<span title="当前频道禁言" style="color:var(--danger);font-size:11px;margin-left:2px;">🔇</span>';
+      if (isBanned) statusDots += '<span title="当前频道封禁" style="color:var(--warning);font-size:11px;margin-left:2px;">🚫</span>';
       return `
       <div class="sidebar-item" id="user-item-${u.id}" onclick="openPrivate('${u.id}','${escHtml(u.username)}')">
         <div class="${isOnline ? 'online-dot' : ''}" style="${isOnline ? '' : 'width:8px;height:8px;border-radius:50%;background:#555;flex-shrink:0'}"></div>
-        <span class="item-name">${escHtml(u.username)}${adminBadge}</span>
+        <span class="item-name">${escHtml(u.username)}${adminBadge}${statusDots}</span>
         ${unread > 0 ? `<span class="badge" id="badge-private-${u.id}">${unread}</span>` : `<span class="badge" id="badge-private-${u.id}" style="display:none">0</span>`}
+        ${adminActions}
       </div>`;
     }).join('');
 }
@@ -1294,6 +1356,107 @@ function apClosePermModal() {
   document.getElementById('ap-perm-modal').classList.remove('show');
   apPermUserId = null;
 }
+
+// ═══════════════════════════════════════════════════════════════
+//  前台用户快捷操作弹窗（管理员）
+// ═══════════════════════════════════════════════════════════════
+let uaTargetUserId = null;
+let uaTargetUsername = '';
+
+function showUserActionPopup(userId, username, event) {
+  uaTargetUserId = userId;
+  uaTargetUsername = username;
+  const popup = document.getElementById('user-action-popup');
+  const hint  = document.getElementById('ua-hint');
+  const mMute = document.getElementById('ua-mute');
+  const mBan  = document.getElementById('ua-ban');
+
+  // 读取当前用户状态
+  api('/api/admin/users', 'GET').then(users => {
+    const u = users.find(x => x.id === userId);
+    if (!u) return;
+    const mutedRooms = u.mutedRooms || [];
+    const bannedRooms = u.bannedRooms || [];
+    const inRoom = currentChat?.type === 'room';
+    const rid = currentChat?.id || '';
+
+    hint.textContent = inRoom ? `当前频道：${currentChat.name}` : '全部权限管理';
+
+    if (inRoom) {
+      const isMuted  = mutedRooms.includes(rid);
+      const isBanned = bannedRooms.includes(rid);
+      mMute.className = `user-action-item ${isMuted ? 'muted' : ''}`;
+      mMute.textContent  = isMuted ? '🔇 开启说话（解禁）' : '🔇 禁止发言';
+      mBan.className  = `user-action-item ${isBanned ? 'banned' : ''}`;
+      mBan.textContent  = isBanned ? '🚫 解除封禁' : '🚫 禁止进入';
+      mMute.style.display = '';
+      mBan.style.display  = '';
+    } else {
+      mMute.style.display = 'none';
+      mBan.style.display  = 'none';
+    }
+
+    // 定位弹窗
+    const x = event.clientX || event.pageX || 0;
+    const y = event.clientY || event.pageY || 0;
+    popup.style.left = Math.min(x, window.innerWidth - 180) + 'px';
+    popup.style.top  = Math.min(y, window.innerHeight - 200) + 'px';
+    popup.classList.add('show');
+  }).catch(() => popup.classList.add('show'));
+}
+
+function hideUserActionPopup() {
+  document.getElementById('user-action-popup').classList.remove('show');
+  uaTargetUserId = null;
+}
+
+async function uaToggleMute() {
+  if (!uaTargetUserId || currentChat?.type !== 'room') return;
+  const rid = currentChat.id;
+  try {
+    const users = await api('/api/admin/users', 'GET');
+    const u = users.find(x => x.id === uaTargetUserId);
+    const mutedRooms = u?.mutedRooms || [];
+    const isMuted = mutedRooms.includes(rid);
+    await api(`/api/admin/users/${uaTargetUserId}/mute`, 'PUT', { roomId: rid, muted: !isMuted });
+    showToast(`✅ 已${isMuted ? '开启说话' : '禁止发言'}`);
+    hideUserActionPopup();
+    renderUsers();
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function uaToggleBan() {
+  if (!uaTargetUserId || currentChat?.type !== 'room') return;
+  const rid = currentChat.id;
+  try {
+    const users = await api('/api/admin/users', 'GET');
+    const u = users.find(x => x.id === uaTargetUserId);
+    const bannedRooms = u?.bannedRooms || [];
+    const isBanned = bannedRooms.includes(rid);
+    await api(`/api/admin/users/${uaTargetUserId}/ban`, 'PUT', { roomId: rid, banned: !isBanned });
+    showToast(`✅ 已${isBanned ? '解除封禁' : '禁止进入'}`);
+    hideUserActionPopup();
+    renderUsers();
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+function uaOpenAllPerm() {
+  hideUserActionPopup();
+  if (uaTargetUserId) openMuteModal(uaTargetUserId, uaTargetUsername);
+}
+
+function uaOpenPrivate() {
+  hideUserActionPopup();
+  if (uaTargetUserId) openPrivate(uaTargetUserId, uaTargetUsername);
+}
+
+// 点击空白区域关闭弹窗
+document.addEventListener('click', (e) => {
+  const popup = document.getElementById('user-action-popup');
+  if (popup && !popup.contains(e.target) && !e.target.closest('.ua-trigger')) {
+    popup.classList.remove('show');
+  }
+});
 
 // ── 频道管理
 async function apLoadRooms() {
