@@ -118,6 +118,9 @@ app.post('/api/login', async (req, res) => {
   res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar } });
 });
 
+// 健康检查（Railway 需要）
+app.get('/health', (req, res) => res.json({ status: 'ok', uptime: process.uptime() }));
+
 app.get('/api/rooms', (req, res) => {
   res.json(stmts.getRooms.all());
 });
