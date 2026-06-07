@@ -134,8 +134,16 @@
     .user-info-sm { flex: 1; overflow: hidden; }
     .user-info-sm .name { font-size: 13px; font-weight: 600; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .user-info-sm .status { font-size: 11px; color: var(--success); }
-    .btn-logout { background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; font-size: 18px; padding: 4px; transition: color var(--transition); }
-    .btn-logout:hover { color: var(--danger); }
+    .btn-logout {
+      background: rgba(255,92,92,0.12);
+      border: 1px solid rgba(255,92,92,0.25);
+      color: var(--danger); cursor: pointer;
+      font-size: 13px; font-weight: 600;
+      padding: 5px 10px; border-radius: var(--radius-sm);
+      transition: all var(--transition);
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .btn-logout:hover { background: var(--danger); color: #fff; }
 
     /* ===== 主区域 ===== */
     .main { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
@@ -265,23 +273,34 @@
 
     /* ===== 响应式 移动端 ===== */
     @media (max-width: 768px) {
-      :root { --sidebar-w: 85vw; }
+      :root { --sidebar-w: 100%; }
+      #app { flex-direction: column; }
+      /* 侧边栏直接显示，不隐藏 */
       .sidebar {
-        position: fixed; top: 0; left: 0; height: 100vh;
-        transform: translateX(-100%);
-        box-shadow: 4px 0 24px rgba(0,0,0,0.35);
+        position: relative; transform: none;
+        width: 100%; height: 45vh; min-height: 160px;
+        border-right: none; border-bottom: 2px solid rgba(255,255,255,0.08);
+        box-shadow: none; z-index: 1;
       }
-      .sidebar.open { transform: translateX(0); }
-      .menu-btn { display: flex !important; align-items: center; justify-content: center; }
+      .sidebar-header { height: 44px; }
+      .sidebar-section { padding: 8px 14px 4px; font-size: 10px; }
+      .sidebar-item { padding: 7px 14px; font-size: 13px; }
+      .sidebar-footer { padding: 8px 14px; }
+      /* 主区域占据剩余空间 */
+      .main { flex: 1; height: 0; min-height: 0; }
+      .menu-btn { display: none !important; }
       .message { max-width: 88%; }
       .auth-box { padding: 36px 24px; }
-      /* 移动端聊天头部始终显示 */
-      .chat-header { display: flex !important; }
-    }
-    @media (max-width: 480px) {
+      .chat-header { display: flex !important; height: 50px; padding: 0 14px; gap: 8px; }
+      .chat-header-title { font-size: 14px; }
       .messages-area { padding: 12px 10px 6px; }
       .input-area { padding: 8px 10px; gap: 6px; }
       #msg-input { padding: 8px 14px; font-size: 14px; }
+      /* 隐藏遮罩层 */
+      .sidebar-overlay { display: none !important; }
+    }
+    @media (max-width: 480px) {
+      .messages-area { padding: 10px 6px 4px; }
     }
   </style>
 </head>
@@ -355,7 +374,7 @@
         <div class="name" id="my-name">-</div>
         <div class="status">● 在线</div>
       </div>
-      <button class="btn-logout" title="退出登录" onclick="doLogout()">⏻</button>
+      <button class="btn-logout" title="退出登录" onclick="confirmLogout()">🚪 退出</button>
     </div>
   </div>
 
@@ -472,6 +491,11 @@ function onLoginSuccess({ token, user }) {
   localStorage.setItem('chat_user', JSON.stringify(user));
   currentUser = user;
   initApp();
+}
+
+function confirmLogout() {
+  if (!confirm('确定要退出登录吗？')) return;
+  doLogout();
 }
 
 function doLogout() {
