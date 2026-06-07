@@ -102,16 +102,6 @@
       padding-bottom: env(safe-area-inset-bottom);
     }
 
-    /* 侧边栏可折叠 */
-    .sidebar.collapsed { width: 44px !important; min-width: 44px !important; }
-    .sidebar.collapsed .sidebar-section,
-    .sidebar.collapsed .sidebar-item,
-    .sidebar.collapsed .sidebar-footer,
-    .sidebar.collapsed .sidebar-scroll,
-    .sidebar.collapsed .app-title,
-    .sidebar.collapsed .collapse-icon { display: none; }
-    .sidebar.collapsed .sidebar-header { justify-content: center; padding: 0; }
-    .sidebar.collapsed .logo { margin: 0; }
     /* 侧边栏内容滚动区 */
     .sidebar-scroll {
       flex: 1;
@@ -123,7 +113,6 @@
       padding: 0 18px; gap: 10px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
       flex-shrink: 0;
-      cursor: pointer; user-select: none;
     }
     .sidebar-header .app-title { font-size: 17px; font-weight: 700; color: #fff; }
     .sidebar-header .logo { font-size: 24px; }
@@ -307,18 +296,7 @@
         display: flex; flex-direction: column;
       }
       .sidebar.open { transform: translateX(0); }
-      .sidebar.collapsed { width: 44px !important; min-width: 44px !important; }
-      .sidebar.collapsed .sidebar-section,
-      .sidebar.collapsed .sidebar-item,
-      .sidebar.collapsed .sidebar-footer,
-      .sidebar.collapsed .sidebar-scroll,
-      .sidebar.collapsed .app-title,
-      .sidebar.collapsed .collapse-icon { display: none; }
-      .sidebar.collapsed .sidebar-header { justify-content: center; padding: 0; }
-      .sidebar.collapsed .logo { margin: 0; }
-      .sidebar-header { height: 44px; cursor: pointer; user-select: none; flex-shrink: 0; }
-      .sidebar-header .collapse-icon { margin-left: auto; font-size: 12px; color: rgba(255,255,255,0.5); transition: transform 0.2s; }
-      .sidebar.collapsed .collapse-icon { display: block !important; transform: rotate(180deg); margin: 0; }
+      .sidebar-header { height: 44px; flex-shrink: 0; }
       .sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; }
       .sidebar-section { padding: 8px 14px 4px; font-size: 10px; }
       .sidebar-item { padding: 7px 14px; font-size: 13px; }
@@ -396,10 +374,9 @@
 
   <!-- 侧边栏 -->
   <div class="sidebar" id="sidebar">
-    <div class="sidebar-header" onclick="toggleSidebarCollapse()">
+    <div class="sidebar-header">
       <span class="logo">💬</span>
       <span class="app-title">ChatApp</span>
-      <span class="collapse-icon" id="collapse-icon">▼</span>
     </div>
 
     <div class="sidebar-scroll" id="sidebar-scroll">
@@ -868,14 +845,6 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('show');
-}
-
-// 手机端侧边栏收起/展开
-function toggleSidebarCollapse() {
-  const sb = document.getElementById('sidebar');
-  const icon = document.getElementById('collapse-icon');
-  sb.classList.toggle('collapsed');
-  if (icon) icon.textContent = sb.classList.contains('collapsed') ? '▲' : '▼';
 }
 
 function toggleEmoji() {
