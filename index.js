@@ -42,7 +42,6 @@ async function getAll(sql, params = []) {
 
 // ─── 初始化数据库 ────────────────────────────────────────────────
 async function initDb() {
-  // 逐条执行建表（pg 不支持一次执行多条语句）
   const tables = [
     `CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -81,7 +80,6 @@ async function initDb() {
     await pool.query(sql);
   }
 
-  // 默认频道（ON CONFLICT DO NOTHING 替代 INSERT OR IGNORE）
   const defaults = [
     { id: 'general', name: '大厅',     desc: '欢迎来到聊天大厅！' },
     { id: 'tech',    name: '技术交流', desc: '讨论技术话题' },
@@ -108,6 +106,35 @@ const clientPath = path.join(__dirname, 'client');
 app.use(express.static(clientPath));
 app.get('/', (req, res) => res.sendFile(path.join(clientPath, 'index.html')));
 
+// ─── 诊断路由（不需要数据库）────────────────────────────────────
+app.get('/health', async (_req, res) => {
+  const info = {
+    status: 'ok',
+    uptime: process.uptime(),
+    env: {
+      PORT: process.env.PORT,
+      DATABASE_URL_EXISTS: !!process.env.DATABASE_URL,
+      DATABASE_URL_PREFIX: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 30) + '...' : 'NOT SET',
+      JWT_SECRET_EXISTS: !!process.env.JWT_SECRET,
+    },
+    dbConnected,
+    nodeVersion: process.version,
+    memory: process.memoryUsage(),
+  };
+
+  // 尝试数据库连接
+  if (process.env.DATABASE_URL) {
+    try {
+      const result = await pool.query('SELECT 1 as test');
+      info.dbTest = { success: true, result: result.rows };
+    } catch (e) {
+      info.dbTest = { success: false, error: e.message };
+    }
+  }
+
+  res.json(info);
+});
+
 // ─── JWT 鉴权中间件 ───────────────────────────────────────────
 async function authMw(req, res, next) {
   const h = req.headers.authorization;
@@ -121,11 +148,6 @@ async function authMw(req, res, next) {
 }
 
 // ─── REST API ───────────────────────────────────────────────────
-
-// 健康检查
-app.get('/health', (_req, res) =>
-  res.json({ status: 'ok', uptime: process.uptime() })
-);
 
 // 注册
 app.post('/api/register', async (req, res) => {
@@ -285,6 +307,9 @@ function broadcastOnline() {
     try {
       console.log(`[db] 尝试连接 PostgreSQL (第 ${retries + 1} 次)...`);
       console.log(`[db] DATABASE_URL 是否存在: ${!!process.env.DATABASE_URL}`);
+      if (process.env.DATABASE_URL) {
+        console.log(`[db] DATABASE_URL 前缀: ${process.env.DATABASE_URL.substring(0, 40)}...`);
+      }
       await pool.query('SELECT 1');
       console.log('[db] PostgreSQL 连接成功 ✓');
 
