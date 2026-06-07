@@ -21,16 +21,21 @@ const pool = new Pool({
 });
 
 // ─── 数据库工具函数 ──────────────────────────────────────────────
+let dbConnected = false;
+
 async function run(sql, params = []) {
+  if (!dbConnected) throw new Error('数据库未连接');
   await pool.query(sql, params);
 }
 
 async function getOne(sql, params = []) {
+  if (!dbConnected) return null;
   const result = await pool.query(sql, params);
   return result.rows[0] || null;
 }
 
 async function getAll(sql, params = []) {
+  if (!dbConnected) return [];
   const result = await pool.query(sql, params);
   return result.rows;
 }
@@ -124,6 +129,7 @@ app.get('/health', (_req, res) =>
 
 // 注册
 app.post('/api/register', async (req, res) => {
+  if (!dbConnected) return res.status(503).json({ error: '数据库服务暂不可用，请稍后重试' });
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
   if (username.length < 2 || username.length > 20) return res.status(400).json({ error: '用户名长度 2~20 位' });
@@ -147,6 +153,7 @@ app.post('/api/register', async (req, res) => {
 
 // 登录
 app.post('/api/login', async (req, res) => {
+  if (!dbConnected) return res.status(503).json({ error: '数据库服务暂不可用，请稍后重试' });
   const { username, password } = req.body;
   try {
     const user = await getOne('SELECT * FROM users WHERE username = $1', [username]);
@@ -271,20 +278,33 @@ function broadcastOnline() {
 
 // ─── 启动 ────────────────────────────────────────────────────────
 (async () => {
-  try {
-    // 测试数据库连接
-    await pool.query('SELECT 1');
-    console.log('[db] PostgreSQL 连接成功 ✓');
+  let retries = 0;
+  const maxRetries = 10;
 
-    // 初始化表结构
-    await initDb();
+  while (retries < maxRetries) {
+    try {
+      console.log(`[db] 尝试连接 PostgreSQL (第 ${retries + 1} 次)...`);
+      console.log(`[db] DATABASE_URL 是否存在: ${!!process.env.DATABASE_URL}`);
+      await pool.query('SELECT 1');
+      console.log('[db] PostgreSQL 连接成功 ✓');
 
-    // 启动 HTTP + Socket 服务
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`✅ ChatApp 启动: http://0.0.0.0:${PORT}`);
-    });
-  } catch (e) {
-    console.error('[db] 启动失败:', e.message);
-    process.exit(1);
+      await initDb();
+      dbConnected = true;
+      console.log('[db] 数据库初始化完成 ✓');
+      break;
+    } catch (e) {
+      retries++;
+      console.error(`[db] 连接失败 (${retries}/${maxRetries}):`, e.message);
+      if (retries >= maxRetries) {
+        console.error('[db] 已达到最大重试次数，数据库功能不可用');
+        break;
+      }
+      await new Promise(r => setTimeout(r, 3000));
+    }
   }
+
+  // 无论数据库是否连接成功，都启动 HTTP 服务器（避免 Railway 502）
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ ChatApp 启动: http://0.0.0.0:${PORT} (dbConnected=${dbConnected})`);
+  });
 })();
