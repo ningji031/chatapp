@@ -312,17 +312,16 @@
       html, body { height: 100dvh; }
       /* 抽屉模式 */
       .sidebar {
-        position: fixed; top: 0; left: 0;
+        position: fixed; top: 0; left: -100%;
         width: var(--sidebar-w);
         height: 100vh;
         height: 100dvh;
         padding-bottom: env(safe-area-inset-bottom);
-        transform: translateX(-100%);
         box-shadow: 4px 0 24px rgba(0,0,0,0.35);
-        z-index: 999; transition: transform 0.25s ease;
+        z-index: 999; transition: left 0.25s ease;
         display: flex; flex-direction: column;
       }
-      .sidebar.open { transform: translateX(0); }
+      .sidebar.open { left: 0; }
       .sidebar-header { height: 44px; flex-shrink: 0; }
       .sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; }
       .sidebar-section { padding: 8px 14px 4px; font-size: 10px; }
