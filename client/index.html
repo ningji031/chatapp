@@ -96,15 +96,33 @@
     .sidebar {
       width: var(--sidebar-w); min-width: var(--sidebar-w);
       background: var(--sidebar-bg); color: var(--sidebar-text);
-      display: flex; flex-direction: column; height: 100%; overflow: hidden;
+      display: flex; flex-direction: column; height: 100%;
+      overflow: hidden;
       transition: transform var(--transition);
       z-index: 100;
+    }
+    /* 侧边栏可折叠 */
+    .sidebar.collapsed { width: 44px !important; min-width: 44px !important; }
+    .sidebar.collapsed .sidebar-section,
+    .sidebar.collapsed .sidebar-item,
+    .sidebar.collapsed .sidebar-footer,
+    .sidebar.collapsed .sidebar-scroll,
+    .sidebar.collapsed .app-title,
+    .sidebar.collapsed .collapse-icon { display: none; }
+    .sidebar.collapsed .sidebar-header { justify-content: center; padding: 0; }
+    .sidebar.collapsed .logo { margin: 0; }
+    /* 侧边栏内容滚动区 */
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
     }
     .sidebar-header {
       height: var(--header-h); display: flex; align-items: center;
       padding: 0 18px; gap: 10px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
       flex-shrink: 0;
+      cursor: pointer; user-select: none;
     }
     .sidebar-header .app-title { font-size: 17px; font-weight: 700; color: #fff; }
     .sidebar-header .logo { font-size: 24px; }
@@ -272,29 +290,39 @@
     #conn-bar.disconnected { display: block; background: var(--danger); color: #fff; }
 
     /* ===== 响应式 移动端 ===== */
+        /* ===== 响应式 移动端 ===== */
     @media (max-width: 768px) {
-      :root { --sidebar-w: 100%; }
-      #app { flex-direction: column; }
-      /* 侧边栏直接显示，不隐藏 */
+      :root { --sidebar-w: 85vw; }
+      #app { flex-direction: row; }
+      /* 抽屉模式 */
       .sidebar {
-        position: relative; transform: none;
-        width: 100%; height: 45vh; min-height: 160px;
-        border-right: none; border-bottom: 2px solid rgba(255,255,255,0.08);
-        box-shadow: none; z-index: 1;
+        position: fixed; top: 0; left: 0;
+        width: 85vw; height: 100vh;
+        transform: translateX(-100%);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.35);
+        z-index: 100; transition: transform 0.25s ease;
+        border-right: none;
+        display: flex; flex-direction: column;
       }
-      .sidebar-header { height: 44px; cursor: pointer; user-select: none; }
-      .sidebar-header .collapse-icon { margin-left: auto; font-size: 14px; color: rgba(255,255,255,0.5); transition: transform 0.2s; }
-      .sidebar.collapsed .collapse-icon { transform: rotate(180deg); }
+      .sidebar.open { transform: translateX(0); }
+      .sidebar.collapsed { width: 44px !important; min-width: 44px !important; }
       .sidebar.collapsed .sidebar-section,
       .sidebar.collapsed .sidebar-item,
-      .sidebar.collapsed .sidebar-footer { display: none; }
-      .sidebar.collapsed { height: 44px !important; min-height: 44px !important; overflow: hidden; }
+      .sidebar.collapsed .sidebar-footer,
+      .sidebar.collapsed .sidebar-scroll,
+      .sidebar.collapsed .app-title,
+      .sidebar.collapsed .collapse-icon { display: none; }
+      .sidebar.collapsed .sidebar-header { justify-content: center; padding: 0; }
+      .sidebar.collapsed .logo { margin: 0; }
+      .sidebar-header { height: 44px; cursor: pointer; user-select: none; flex-shrink: 0; }
+      .sidebar-header .collapse-icon { margin-left: auto; font-size: 12px; color: rgba(255,255,255,0.5); transition: transform 0.2s; }
+      .sidebar.collapsed .collapse-icon { display: block !important; transform: rotate(180deg); margin: 0; }
+      .sidebar-scroll { flex: 1; overflow-y: auto; min-height: 0; }
       .sidebar-section { padding: 8px 14px 4px; font-size: 10px; }
       .sidebar-item { padding: 7px 14px; font-size: 13px; }
-      .sidebar-footer { padding: 8px 14px; }
-      /* 主区域占据剩余空间 */
-      .main { flex: 1; height: 0; min-height: 0; }
-      .menu-btn { display: none !important; }
+      .sidebar-footer { padding: 8px 14px; flex-shrink: 0; }
+      .main { flex: 1; height: 100vh; min-height: 0; }
+      .menu-btn { display: flex !important; align-items: center; justify-content: center; }
       .message { max-width: 88%; }
       .auth-box { padding: 36px 24px; }
       .chat-header { display: flex !important; height: 50px; padding: 0 14px; gap: 8px; }
@@ -302,8 +330,9 @@
       .messages-area { padding: 12px 10px 6px; }
       .input-area { padding: 8px 10px; gap: 6px; }
       #msg-input { padding: 8px 14px; font-size: 14px; }
-      /* 隐藏遮罩层 */
-      .sidebar-overlay { display: none !important; }
+    }
+    @media (max-width: 480px) {
+      .messages-area { padding: 10px 6px 4px; }
     }
     @media (max-width: 480px) {
       .messages-area { padding: 10px 6px 4px; }
@@ -369,11 +398,13 @@
       <span class="collapse-icon" id="collapse-icon">▼</span>
     </div>
 
-    <div class="sidebar-section">频道</div>
-    <div id="rooms-list"></div>
+    <div class="sidebar-scroll" id="sidebar-scroll">
+      <div class="sidebar-section">频道</div>
+      <div id="rooms-list"></div>
 
-    <div class="sidebar-section">私聊</div>
-    <div id="users-list"></div>
+      <div class="sidebar-section">私聊</div>
+      <div id="users-list"></div>
+    </div>
 
     <div class="sidebar-footer">
       <img class="user-avatar-sm" id="my-avatar" src="" alt="avatar" />
