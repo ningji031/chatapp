@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>ChatApp 后台管理</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #6c63ff;
+      --primary-dark: #5a52d5;
+      --bg: #f5f6fa;
+      --card: #ffffff;
+      --border: #e8eaf0;
+      --text: #2d2d3a;
+      --text-muted: #8b8fa8;
+      --danger: #ff5c5c;
+      --success: #4caf50;
+      --warning: #ff9800;
+      --radius: 12px;
+      --shadow: 0 2px 12px rgba(108,99,255,0.10);
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    a { color: var(--primary); text-decoration: none; }
+
+    /* 登录页 */
+    .login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #6c63ff 0%, #48c6ef 100%); }
+    .login-box { background: #fff; border-radius: 20px; padding: 40px 36px; width: 360px; max-width: 95vw; box-shadow: 0 20px 60px rgba(108,99,255,0.25); }
+    .login-box h1 { text-align: center; font-size: 22px; color: var(--primary); margin-bottom: 24px; }
+    .login-box input { width: 100%; padding: 11px 14px; margin-bottom: 14px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; }
+    .login-box input:focus { border-color: var(--primary); }
+    .login-box button { width: 100%; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
+    .login-box button:hover { background: var(--primary-dark); }
+    .login-error { color: var(--danger); font-size: 13px; margin-top: 10px; text-align: center; min-height: 18px; }
+    .back-link { text-align: center; margin-top: 14px; font-size: 13px; }
+
+    /* 管理页 */
+    .admin-page { display: none; max-width: 1100px; margin: 0 auto; padding: 20px; }
+    .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .admin-header h1 { font-size: 22px; }
+    .admin-header .info { font-size: 13px; color: var(--text-muted); }
+    .btn-logout { background: none; border: 1px solid var(--danger); color: var(--danger); padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+    .btn-logout:hover { background: var(--danger); color: #fff; }
+
+    /* 卡片 */
+    .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 20px; }
+    .card h2 { font-size: 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .card h2 .badge { background: var(--primary); color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+
+    /* 表格 */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { text-align: left; padding: 8px 10px; color: var(--text-muted); font-size: 12px; font-weight: 600; border-bottom: 2px solid var(--border); }
+    td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover { background: #f8f8fc; }
+
+    /* 按钮 */
+    .btn-sm { padding: 4px 10px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; }
+    .btn-danger { background: rgba(255,92,92,0.12); color: var(--danger); }
+    .btn-danger:hover { background: var(--danger); color: #fff; }
+    .btn-success { background: rgba(76,175,80,0.12); color: var(--success); }
+    .btn-success:hover { background: var(--success); color: #fff; }
+    .btn-primary-sm { background: rgba(108,99,255,0.12); color: var(--primary); }
+    .btn-primary-sm:hover { background: var(--primary); color: #fff; }
+    .btn-warning { background: rgba(255,152,0,0.12); color: var(--warning); }
+    .btn-warning:hover { background: var(--warning); color: #fff; }
+
+    /* 表单 */
+    .inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+    .inline-form .form-group { display: flex; flex-direction: column; gap: 3px; }
+    .inline-form label { font-size: 11px; font-weight: 600; color: var(--text-muted); }
+    .inline-form input { padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 13px; outline: none; }
+    .inline-form input:focus { border-color: var(--primary); }
+    .inline-form button { padding: 7px 16px; background: var(--primary); color: #fff; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; height: fit-content; }
+    .checkbox-label { display: flex; align-items: center; gap: 4px; font-size: 13px; cursor: pointer; }
+
+    /* Toast */
+    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: rgba(40,40,60,0.92); color: #fff; padding: 9px 20px; border-radius: 20px; font-size: 13px; z-index: 9999; opacity: 0; transition: all 0.3s; pointer-events: none; white-space: nowrap; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* 确认弹窗 */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 380px; width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.25); text-align: center; }
+    .modal p { font-size: 15px; margin-bottom: 18px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: center; }
+    .modal-actions button { padding: 8px 22px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500; }
+    .modal-cancel { background: var(--bg); color: var(--text); }
+    .modal-confirm { background: var(--danger); color: #fff; }
+
+    .admin-tag { background: var(--primary); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- 登录页 -->
+<div class="login-page" id="login-page">
+  <div class="login-box">
+    <h1>🔑 后台管理登录</h1>
+    <input type="text" id="adm-user" placeholder="用户名（需要管理员权限）" />
+    <input type="password" id="adm-pass" placeholder="密码" onkeydown="if(event.key==='Enter')admLogin()" />
+    <button onclick="admLogin()">登 录</button>
+    <div class="login-error" id="adm-err"></div>
+    <div class="back-link"><a href="/">← 返回聊天</a></div>
+  </div>
+</div>
+
+<!-- 管理页 -->
+<div class="admin-page" id="admin-page">
+  <div class="admin-header">
+    <div>
+      <h1>⚙️ ChatApp 后台管理</h1>
+      <div class="info">登录为：<strong id="adm-name">-</strong> | <a href="/">返回聊天 →</a></div>
+    </div>
+    <button class="btn-logout" onclick="admLogout()">退出登录</button>
+  </div>
+
+  <!-- 用户管理 -->
+  <div class="card">
+    <h2>👥 用户管理 <span class="badge" id="user-count">0</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>头像</th><th>用户名</th><th>管理员</th><th>注册时间</th><th>操作</th></tr></thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 添加用户 -->
+  <div class="card">
+    <h2>➕ 添加用户</h2>
+    <div class="inline-form" id="add-user-form">
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="new-username" placeholder="2~20位" />
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="new-password" placeholder="至少6位" />
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label"><input type="checkbox" id="new-is-admin" /> 设为管理员</label>
+      </div>
+      <div class="form-group">
+        <button onclick="addUser()">添加用户</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 频道管理 -->
+  <div class="card">
+    <h2>📢 频道管理 <span class="badge" id="room-count">0</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>名称</th><th>描述</th><th>操作</th></tr></thead>
+        <tbody id="rooms-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 添加频道 -->
+  <div class="card">
+    <h2>➕ 添加频道</h2>
+    <div class="inline-form">
+      <div class="form-group">
+        <label>频道 ID</label>
+        <input type="text" id="new-room-id" placeholder="如：gaming" />
+      </div>
+      <div class="form-group">
+        <label>名称</label>
+        <input type="text" id="new-room-name" placeholder="如：游戏娱乐" />
+      </div>
+      <div class="form-group">
+        <label>描述</label>
+        <input type="text" id="new-room-desc" placeholder="频道描述（可选）" />
+      </div>
+      <div class="form-group">
+        <button onclick="addRoom()">添加频道</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 确认弹窗 -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <p id="modal-msg">确定要删除吗？</p>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeModal()">取消</button>
+      <button class="modal-confirm" id="modal-ok">确定删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+let admToken = localStorage.getItem('adm_token');
+let admUser = null;
+
+// ── 初始化
+(async function() {
+  if (admToken) {
+    try {
+      const me = parseToken(admToken);
+      admUser = me;
+      document.getElementById('adm-name').textContent = me.username;
+      showAdminPage();
+      loadUsers();
+      loadRooms();
+    } catch(e) {
+      localStorage.removeItem('adm_token');
+      admToken = null;
+    }
+  }
+})();
+
+function parseToken(token) {
+  const p = token.split('.')[1];
+  return JSON.parse(atob(p));
+}
+
+// ── 登录
+async function admLogin() {
+  const u = document.getElementById('adm-user').value.trim();
+  const p = document.getElementById('adm-pass').value;
+  if (!u || !p) return setAdmErr('请输入用户名和密码');
+  try {
+    const res = await api('/api/login', 'POST', { username: u, password: p });
+    if (!res.user.is_admin) return setAdmErr('该账号不是管理员');
+    admToken = res.token;
+    admUser = res.user;
+    localStorage.setItem('adm_token', res.token);
+    document.getElementById('adm-name').textContent = res.user.username;
+    showAdminPage();
+    loadUsers();
+    loadRooms();
+  } catch(e) {
+    setAdmErr(e.message);
+  }
+}
+
+function admLogout() {
+  localStorage.removeItem('adm_token');
+  admToken = null;
+  admUser = null;
+  document.getElementById('admin-page').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+}
+
+function setAdmErr(msg) {
+  document.getElementById('adm-err').textContent = msg;
+}
+
+function showAdminPage() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('admin-page').style.display = 'block';
+}
+
+// ── API 封装
+async function api(path, method, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admToken}` },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || '请求失败');
+  return data;
+}
+
+// ── 用户管理
+async function loadUsers() {
+  try {
+    const users = await api('/api/admin/users', 'GET');
+    document.getElementById('user-count').textContent = users.length;
+    document.getElementById('users-tbody').innerHTML = users.map(u => `
+      <tr>
+        <td><img src="${u.avatar || ''}" style="width:30px;height:30px;border-radius:50%;background:#eee;object-fit:cover" onerror="this.style.display='none'" /></td>
+        <td>${escHtml(u.username)} ${u.is_admin ? '<span class="admin-tag">管理员</span>' : ''}</td>
+        <td>
+          ${u.id !== admUser.id ? `
+            <button class="btn-sm ${u.is_admin ? 'btn-warning' : 'btn-success'}" onclick="toggleAdmin('${u.id}', ${u.is_admin ? 0 : 1})">
+              ${u.is_admin ? '取消管理员' : '设为管理员'}
+            </button>
+          ` : '<span style="color:#aaa;font-size:12px">当前用户</span>'}
+        </td>
+        <td>${formatDate(u.created_at)}</td>
+        <td>
+          ${u.id !== admUser.id ? `
+            <button class="btn-sm btn-danger" onclick="confirmDeleteUser('${u.id}', '${escHtml(u.username)}')">删除</button>
+          ` : '<span style="color:#aaa;font-size:12px">-</span>'}
+        </td>
+      </tr>
+    `).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function addUser() {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value;
+  const is_admin = document.getElementById('new-is-admin').checked;
+  if (!username || !password) return showToast('请输入用户名和密码');
+  try {
+    await api('/api/admin/users', 'POST', { username, password, is_admin });
+    showToast('✅ 用户添加成功');
+    document.getElementById('new-username').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('new-is-admin').checked = false;
+    loadUsers();
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+}
+
+async function toggleAdmin(id, is_admin) {
+  try {
+    await api(`/api/admin/users/${id}/admin`, 'PUT', { is_admin });
+    showToast('✅ 权限已更新');
+    loadUsers();
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+}
+
+let pendingDeleteUserId = null;
+function confirmDeleteUser(id, name) {
+  pendingDeleteUserId = id;
+  document.getElementById('modal-msg').textContent = `确定要删除用户「${name}」吗？此操作不可撤销。`;
+  document.getElementById('modal').classList.add('show');
+}
+async function doDeleteUser() {
+  if (!pendingDeleteUserId) return;
+  try {
+    await api(`/api/admin/users/${pendingDeleteUserId}`, 'DELETE');
+    showToast('✅ 用户已删除');
+    loadUsers();
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+  closeModal();
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+  pendingDeleteUserId = null;
+}
+document.getElementById('modal-ok').onclick = doDeleteUser;
+
+// ── 频道管理
+async function loadRooms() {
+  try {
+    const rooms = await api('/api/admin/rooms', 'GET');
+    document.getElementById('room-count').textContent = rooms.length;
+    document.getElementById('rooms-tbody').innerHTML = rooms.map(r => `
+      <tr>
+        <td><code>${escHtml(r.id)}</code></td>
+        <td>${escHtml(r.name)}</td>
+        <td>${escHtml(r.description || '-')}</td>
+        <td><button class="btn-sm btn-danger" onclick="confirmDeleteRoom('${escHtml(r.id)}', '${escHtml(r.name)}')">删除</button></td>
+      </tr>
+    `).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function addRoom() {
+  const id = document.getElementById('new-room-id').value.trim();
+  const name = document.getElementById('new-room-name').value.trim();
+  const description = document.getElementById('new-room-desc').value.trim();
+  if (!id || !name) return showToast('请输入频道 ID 和名称');
+  try {
+    await api('/api/admin/rooms', 'POST', { id, name, description });
+    showToast('✅ 频道添加成功');
+    document.getElementById('new-room-id').value = '';
+    document.getElementById('new-room-name').value = '';
+    document.getElementById('new-room-desc').value = '';
+    loadRooms();
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+}
+
+let pendingDeleteRoomId = null;
+function confirmDeleteRoom(id, name) {
+  pendingDeleteRoomId = id;
+  document.getElementById('modal-msg').textContent = `确定要删除频道「${name}」吗？聊天记录也会一并删除。`;
+  document.getElementById('modal').classList.add('show');
+}
+async function doDeleteRoom() {
+  if (!pendingDeleteRoomId) return;
+  try {
+    await api(`/api/admin/rooms/${pendingDeleteRoomId}`, 'DELETE');
+    showToast('✅ 频道已删除');
+    loadRooms();
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+  closeModal();
+}
+
+// ── 工具
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatDate(ts) {
+  if (!ts) return '-';
+  const d = new Date(ts * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>

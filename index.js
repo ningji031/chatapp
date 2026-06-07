@@ -48,13 +48,16 @@ async function dbRun(sql, params = []) {
 async function initDb() {
   if (!pool) return;
   const tables = [
-    `CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar TEXT DEFAULT '', created_at INTEGER DEFAULT EXTRACT(EPOCH FROM NOW()))`,
+    `CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, avatar TEXT DEFAULT '', is_admin INTEGER DEFAULT 0, created_at INTEGER DEFAULT EXTRACT(EPOCH FROM NOW()))`,
     `CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL, description TEXT DEFAULT '', created_by TEXT, created_at INTEGER DEFAULT EXTRACT(EPOCH FROM NOW()))`,
     `CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, room_id TEXT, sender_id TEXT NOT NULL, sender_name TEXT NOT NULL, content TEXT NOT NULL, type TEXT DEFAULT 'text', created_at INTEGER DEFAULT EXTRACT(EPOCH FROM NOW()))`,
     `CREATE TABLE IF NOT EXISTS private_messages (id TEXT PRIMARY KEY, from_id TEXT NOT NULL, to_id TEXT NOT NULL, content TEXT NOT NULL, type TEXT DEFAULT 'text', read INTEGER DEFAULT 0, created_at INTEGER DEFAULT EXTRACT(EPOCH FROM NOW()))`,
   ];
   for (const sql of tables) await pool.query(sql);
-  
+
+  // 添加 is_admin 列（如果已存在会报错，忽略）
+  try { await pool.query('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'); } catch(e) {}
+
   const defaults = [
     { id: 'general', name: '大厅', desc: '欢迎来到聊天大厅！' },
     { id: 'tech', name: '技术交流', desc: '讨论技术话题' },
@@ -63,6 +66,10 @@ async function initDb() {
   for (const r of defaults) {
     await pool.query(`INSERT INTO rooms(id,name,description,created_by) VALUES($1,$2,$3,'system') ON CONFLICT(id) DO NOTHING`, [r.id, r.name, r.desc]);
   }
+
+  // 设置第一个用户为管理员（用户名：555）
+  await pool.query('UPDATE users SET is_admin=1 WHERE username=$1', ['555']);
+
   console.log('[db] PostgreSQL 初始化完成 ✓');
 }
 
@@ -148,18 +155,18 @@ app.post('/api/register', async (req, res) => {
       const hashed = await bcrypt.hash(password, 10);
       const id = require('uuid').v4();
       const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
-      await dbRun('INSERT INTO users(id,username,password,avatar) VALUES($1,$2,$3,$4)', [id, username, hashed, avatar]);
-      const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '7d' });
-      res.json({ token, user: { id, username, avatar } });
+      await dbRun('INSERT INTO users(id,username,password,avatar,is_admin) VALUES($1,$2,$3,$4,$5)', [id, username, hashed, avatar, 0]);
+      const token = jwt.sign({ id, username, is_admin: 0 }, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ token, user: { id, username, avatar, is_admin: 0 } });
     } else {
       // 内存模式
       for (const u of memUsers.values()) if (u.username === username) return res.status(400).json({ error: '用户名已被占用' });
       const id = 'user_' + Date.now();
       const hashed = await bcrypt.hash(password, 10);
       const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
-      memUsers.set(id, { id, username, password: hashed, avatar });
-      const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '7d' });
-      res.json({ token, user: { id, username, avatar } });
+      memUsers.set(id, { id, username, password: hashed, avatar, is_admin: 0 });
+      const token = jwt.sign({ id, username, is_admin: 0 }, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ token, user: { id, username, avatar, is_admin: 0 } });
     }
   } catch (e) {
     console.error('[Register]', e.message);
@@ -176,16 +183,16 @@ app.post('/api/login', async (req, res) => {
       if (!user) return res.status(401).json({ error: '用户名或密码错误' });
       const ok = await bcrypt.compare(password, user.password);
       if (!ok) return res.status(401).json({ error: '用户名或密码错误' });
-      const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-      res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar } });
+      const token = jwt.sign({ id: user.id, username: user.username, is_admin: user.is_admin || 0 }, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, is_admin: user.is_admin || 0 } });
     } else {
       let user = null;
       for (const u of memUsers.values()) if (u.username === username) { user = u; break; }
       if (!user) return res.status(401).json({ error: '用户名或密码错误' });
       const ok = await bcrypt.compare(password, user.password);
       if (!ok) return res.status(401).json({ error: '用户名或密码错误' });
-      const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
-      res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar } });
+      const token = jwt.sign({ id: user.id, username: user.username, is_admin: user.is_admin || 0 }, JWT_SECRET, { expiresIn: '7d' });
+      res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, is_admin: user.is_admin || 0 } });
     }
   } catch (e) {
     console.error('[Login]', e.message);
@@ -221,6 +228,153 @@ app.get('/api/private/:userId', authMw, async (req, res) => {
     res.json(rows);
   } else {
     res.json(memPrivateMessages.filter(m => (m.from_id === me && m.to_id === other) || (m.from_id === other && m.to_id === me)).slice(-100));
+  }
+});
+
+// ─── 管理员鉴权────────────────────────────────────────
+function adminMw(req, res, next) {
+  authMw(req, res, () => {
+    if (!req.user.is_admin) return res.status(403).json({ error: '需要管理员权限' });
+    next();
+  });
+}
+
+// ─── 管理员 API─────────────────────────────────────────
+
+// 获取所有用户（管理员）
+app.get('/api/admin/users', adminMw, async (req, res) => {
+  try {
+    if (dbConnected) {
+      const rows = await dbQuery('SELECT id, username, avatar, is_admin, created_at FROM users ORDER BY created_at DESC');
+      res.json(rows);
+    } else {
+      res.json([...memUsers.values()].map(u => ({ id: u.id, username: u.username, avatar: u.avatar, is_admin: u.is_admin || 0, created_at: u.created_at })));
+    }
+  } catch (e) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 添加用户（管理员）
+app.post('/api/admin/users', adminMw, async (req, res) => {
+  const { username, password, is_admin } = req.body;
+  if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
+  if (username.length < 2 || username.length > 20) return res.status(400).json({ error: '用户名长度 2~20 位' });
+  if (password.length < 6) return res.status(400).json({ error: '密码至少 6 位' });
+
+  try {
+    if (dbConnected) {
+      const exists = (await dbQuery('SELECT id FROM users WHERE username = $1', [username]))[0];
+      if (exists) return res.status(400).json({ error: '用户名已被占用' });
+      const hashed = await bcrypt.hash(password, 10);
+      const id = require('uuid').v4();
+      const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+      await dbRun('INSERT INTO users(id, username, password, avatar, is_admin) VALUES($1,$2,$3,$4,$5)', [id, username, hashed, avatar, is_admin ? 1 : 0]);
+      res.json({ success: true, user: { id, username, avatar, is_admin: is_admin ? 1 : 0 } });
+    } else {
+      for (const u of memUsers.values()) if (u.username === username) return res.status(400).json({ error: '用户名已被占用' });
+      const id = 'user_' + Date.now();
+      const hashed = await bcrypt.hash(password, 10);
+      const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+      memUsers.set(id, { id, username, password: hashed, avatar, is_admin: is_admin ? 1 : 0 });
+      res.json({ success: true, user: { id, username, avatar, is_admin: is_admin ? 1 : 0 } });
+    }
+  } catch (e) {
+    console.error('[Admin Add User]', e.message);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 删除用户（管理员）
+app.delete('/api/admin/users/:id', adminMw, async (req, res) => {
+  const { id } = req.params;
+  if (id === req.user.id) return res.status(400).json({ error: '不能删除自己' });
+
+  try {
+    if (dbConnected) {
+      await dbRun('DELETE FROM users WHERE id = $1', [id]);
+      await dbRun('DELETE FROM private_messages WHERE from_id = $1 OR to_id = $1', [id]);
+      await dbRun('DELETE FROM messages WHERE sender_id = $1', [id]);
+      res.json({ success: true });
+    } else {
+      memUsers.delete(id);
+      res.json({ success: true });
+    }
+  } catch (e) {
+    console.error('[Admin Delete User]', e.message);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 设置/取消管理员（管理员）
+app.put('/api/admin/users/:id/admin', adminMw, async (req, res) => {
+  const { id } = req.params;
+  const { is_admin } = req.body;
+
+  try {
+    if (dbConnected) {
+      await dbRun('UPDATE users SET is_admin = $1 WHERE id = $2', [is_admin ? 1 : 0, id]);
+      res.json({ success: true });
+    } else {
+      const user = memUsers.get(id);
+      if (user) user.is_admin = is_admin ? 1 : 0;
+      res.json({ success: true });
+    }
+  } catch (e) {
+    console.error('[Admin Set Admin]', e.message);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取所有频道（管理员）
+app.get('/api/admin/rooms', adminMw, async (req, res) => {
+  try {
+    if (dbConnected) {
+      const rows = await dbQuery('SELECT * FROM rooms ORDER BY created_at ASC');
+      res.json(rows);
+    } else {
+      res.json(memRooms);
+    }
+  } catch (e) {
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 添加频道（管理员）
+app.post('/api/admin/rooms', adminMw, async (req, res) => {
+  const { id, name, description } = req.body;
+  if (!id || !name) return res.status(400).json({ error: 'ID 和名称不能为空' });
+
+  try {
+    if (dbConnected) {
+      await dbRun('INSERT INTO rooms(id, name, description, created_by) VALUES($1,$2,$3,$4)', [id, name, description || '', req.user.id]);
+      res.json({ success: true });
+    } else {
+      memRooms.push({ id, name, description: description || '' });
+      res.json({ success: true });
+    }
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) return res.status(400).json({ error: '频道 ID 已存在' });
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 删除频道（管理员）
+app.delete('/api/admin/rooms/:id', adminMw, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    if (dbConnected) {
+      await dbRun('DELETE FROM rooms WHERE id = $1', [id]);
+      await dbRun('DELETE FROM messages WHERE room_id = $1', [id]);
+      res.json({ success: true });
+    } else {
+      const idx = memRooms.findIndex(r => r.id === id);
+      if (idx !== -1) memRooms.splice(idx, 1);
+      res.json({ success: true });
+    }
+  } catch (e) {
+    res.status(500).json({ error: '服务器错误' });
   }
 });
 
