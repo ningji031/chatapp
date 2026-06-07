@@ -656,16 +656,16 @@
 
 <!-- 用户快捷操作弹窗（管理员） -->
 <div class="user-action-popup" id="user-action-popup">
-  <div class="user-action-hint" id="ua-hint">当前频道操作</div>
+  <div class="user-action-hint" id="ua-hint">管理员操作</div>
   <div class="user-action-item" id="ua-mute" onclick="uaToggleMute()">
     🔇 禁止发言
   </div>
   <div class="user-action-item" id="ua-ban" onclick="uaToggleBan()">
     🚫 禁止进入
   </div>
-  <div class="user-action-sep"></div>
+  <div class="user-action-sep" id="ua-sep"></div>
   <div class="user-action-item" onclick="uaOpenAllPerm()">
-    🔧 全部权限管理
+    🔧 管理所有频道权限
   </div>
   <div class="user-action-item" onclick="uaOpenPrivate()">
     💬 发起私聊
@@ -1380,7 +1380,7 @@ function showUserActionPopup(userId, username, event) {
     const inRoom = currentChat?.type === 'room';
     const rid = currentChat?.id || '';
 
-    hint.textContent = inRoom ? `当前频道：${currentChat.name}` : '全部权限管理';
+    hint.textContent = `对 ${username} 的操作`;
 
     if (inRoom) {
       const isMuted  = mutedRooms.includes(rid);
@@ -1391,9 +1391,16 @@ function showUserActionPopup(userId, username, event) {
       mBan.textContent  = isBanned ? '🚫 解除封禁' : '🚫 禁止进入';
       mMute.style.display = '';
       mBan.style.display  = '';
+      document.getElementById('ua-sep').style.display = '';
     } else {
-      mMute.style.display = 'none';
-      mBan.style.display  = 'none';
+      // 不在频道中：显示为快速入口，点击后打开全权限管理
+      mMute.className = 'user-action-item';
+      mMute.textContent = '🔇 禁言/解禁（选择频道）';
+      mBan.className = 'user-action-item';
+      mBan.textContent = '🚫 封禁/解封（选择频道）';
+      mMute.style.display = '';
+      mBan.style.display  = '';
+      document.getElementById('ua-sep').style.display = '';
     }
 
     // 定位弹窗
@@ -1411,7 +1418,13 @@ function hideUserActionPopup() {
 }
 
 async function uaToggleMute() {
-  if (!uaTargetUserId || currentChat?.type !== 'room') return;
+  if (!uaTargetUserId) return;
+  // 不在频道中时，打开全权限管理
+  if (currentChat?.type !== 'room') {
+    hideUserActionPopup();
+    apOpenPerm(uaTargetUserId, uaTargetUsername);
+    return;
+  }
   const rid = currentChat.id;
   try {
     const users = await api('/api/admin/users', 'GET');
@@ -1426,7 +1439,13 @@ async function uaToggleMute() {
 }
 
 async function uaToggleBan() {
-  if (!uaTargetUserId || currentChat?.type !== 'room') return;
+  if (!uaTargetUserId) return;
+  // 不在频道中时，打开全权限管理
+  if (currentChat?.type !== 'room') {
+    hideUserActionPopup();
+    apOpenPerm(uaTargetUserId, uaTargetUsername);
+    return;
+  }
   const rid = currentChat.id;
   try {
     const users = await api('/api/admin/users', 'GET');
@@ -1442,7 +1461,7 @@ async function uaToggleBan() {
 
 function uaOpenAllPerm() {
   hideUserActionPopup();
-  if (uaTargetUserId) openMuteModal(uaTargetUserId, uaTargetUsername);
+  if (uaTargetUserId) apOpenPerm(uaTargetUserId, uaTargetUsername);
 }
 
 function uaOpenPrivate() {
