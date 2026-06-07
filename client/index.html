@@ -265,16 +265,18 @@
 
     /* ===== 响应式 移动端 ===== */
     @media (max-width: 768px) {
-      :root { --sidebar-w: 80vw; }
+      :root { --sidebar-w: 85vw; }
       .sidebar {
-        position: fixed; top: 0; left: 0; height: 100%;
+        position: fixed; top: 0; left: 0; height: 100vh;
         transform: translateX(-100%);
-        z-index: 100;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.35);
       }
       .sidebar.open { transform: translateX(0); }
-      .menu-btn { display: block; }
+      .menu-btn { display: flex !important; align-items: center; justify-content: center; }
       .message { max-width: 88%; }
       .auth-box { padding: 36px 24px; }
+      /* 移动端聊天头部始终显示 */
+      .chat-header { display: flex !important; }
     }
     @media (max-width: 480px) {
       .messages-area { padding: 12px 10px 6px; }
