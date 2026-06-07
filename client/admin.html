@@ -90,6 +90,16 @@
     .modal-confirm { background: var(--danger); color: #fff; }
 
     .admin-tag { background: var(--primary); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 4px; }
+    .mute-modal { background: #fff; border-radius: 16px; padding: 28px; max-width: 480px; width: 92vw; max-height: 80vh; overflow-y: auto; text-align: left; }
+    .mute-modal h3 { font-size: 16px; margin-bottom: 16px; }
+    .mute-room-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .mute-room-item:last-child { border-bottom: none; }
+    .mute-room-name { font-size: 14px; font-weight: 600; }
+    .mute-room-id { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+    .toggle-group { display: flex; gap: 8px; align-items: center; }
+    .toggle-btn { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: all 0.15s; }
+    .toggle-btn.active-mute { background: rgba(255,92,92,0.12); color: var(--danger); border-color: rgba(255,92,92,0.3); }
+    .toggle-btn.active-ban { background: rgba(255,152,0,0.12); color: var(--warning); border-color: rgba(255,152,0,0.3); }
   </style>
 </head>
 <body>
@@ -189,6 +199,17 @@
     <div class="modal-actions">
       <button class="modal-cancel" onclick="closeModal()">取消</button>
       <button class="modal-confirm" id="modal-ok">确定删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 频道权限弹窗 -->
+<div class="modal-overlay" id="mute-modal">
+  <div class="mute-modal">
+    <h3 id="mute-modal-title">频道权限管理</h3>
+    <div id="mute-room-list"></div>
+    <div style="text-align:center;margin-top:18px;">
+      <button class="btn-sm btn-success" onclick="closeMuteModal()" style="padding:7px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;">关闭</button>
     </div>
   </div>
 </div>
@@ -296,6 +317,11 @@ async function loadUsers() {
         <td>${formatDate(u.created_at)}</td>
         <td>
           ${u.id !== admUser.id ? `
+            <button class="btn-sm btn-primary-sm" onclick="openMuteModal('${u.id}', '${escHtml(u.username)}')">频道权限</button>
+          ` : '<span style="color:#aaa;font-size:12px">当前用户</span>'}
+        </td>
+        <td>
+          ${u.id !== admUser.id ? `
             <button class="btn-sm btn-danger" onclick="confirmDeleteUser('${u.id}', '${escHtml(u.username)}')">删除</button>
           ` : '<span style="color:#aaa;font-size:12px">-</span>'}
         </td>
@@ -353,6 +379,72 @@ function closeModal() {
   pendingDeleteUserId = null;
 }
 document.getElementById('modal-ok').onclick = doDeleteUser;
+
+// ── 频道权限管理（禁言/封禁）
+let pendingMuteUserId = null;
+async function openMuteModal(userId, username) {
+  pendingMuteUserId = userId;
+  document.getElementById('mute-modal-title').textContent = `频道权限 — ${username}`;
+  document.getElementById('mute-modal').classList.add('show');
+
+  try {
+    const [user, rooms] = await Promise.all([
+      api('/api/admin/users', 'GET').then(users => users.find(u => u.id === userId)),
+      api('/api/admin/rooms', 'GET')
+    ]);
+    const mutedRooms = user?.mutedRooms || [];
+    const bannedRooms = user?.bannedRooms || [];
+
+    document.getElementById('mute-room-list').innerHTML = rooms.map(r => `
+      <div class="mute-room-item">
+        <div>
+          <div class="mute-room-name">${escHtml(r.name)}</div>
+          <div class="mute-room-id"><code>${escHtml(r.id)}</code></div>
+        </div>
+        <div class="toggle-group">
+          <button class="toggle-btn ${mutedRooms.includes(r.id) ? 'active-mute' : ''}"
+            onclick="toggleMuteRoom('${userId}','${r.id}', ${mutedRooms.includes(r.id)})">
+            ${mutedRooms.includes(r.id) ? '已禁言' : '未禁言'}
+          </button>
+          <button class="toggle-btn ${bannedRooms.includes(r.id) ? 'active-ban' : ''}"
+            onclick="toggleBanRoom('${userId}','${r.id}', ${bannedRooms.includes(r.id)})">
+            ${bannedRooms.includes(r.id) ? '已封禁' : '未封禁'}
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+}
+
+async function toggleMuteRoom(userId, roomId, currentMuted) {
+  try {
+    await api(`/api/admin/users/${userId}/mute`, 'PUT', { roomId, muted: !currentMuted });
+    showToast('✅ 禁言状态已更新');
+    // 刷新模态框
+    const user = (await api('/api/admin/users', 'GET')).find(u => u.id === userId);
+    openMuteModal(userId, user?.username || '');
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+}
+
+async function toggleBanRoom(userId, roomId, currentBanned) {
+  try {
+    await api(`/api/admin/users/${userId}/ban`, 'PUT', { roomId, banned: !currentBanned });
+    showToast('✅ 封禁状态已更新');
+    const user = (await api('/api/admin/users', 'GET')).find(u => u.id === userId);
+    openMuteModal(userId, user?.username || '');
+  } catch(e) {
+    showToast('❌ ' + e.message);
+  }
+}
+
+function closeMuteModal() {
+  document.getElementById('mute-modal').classList.remove('show');
+  pendingMuteUserId = null;
+}
 
 // ── 频道管理
 async function loadRooms() {

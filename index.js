@@ -57,6 +57,9 @@ async function initDb() {
 
   // 添加 is_admin 列（如果已存在会报错，忽略）
   try { await pool.query('ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'); } catch(e) {}
+  // 添加禁言/封禁列
+  try { await pool.query('ALTER TABLE users ADD COLUMN muted_rooms TEXT DEFAULT \'[]\''); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN banned_rooms TEXT DEFAULT \'[]\''); } catch(e) {}
 
   const defaults = [
     { id: 'general', name: '大厅', desc: '欢迎来到聊天大厅！' },
@@ -141,13 +144,13 @@ function authMw(req, res, next) {
 
 // ─── REST API────────────────────────────────────────────────────
 
-// 注册
+// 注册（新用户默认在所有频道禁言）
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: '用户名和密码不能为空' });
   if (username.length < 2 || username.length > 20) return res.status(400).json({ error: '用户名长度 2~20 位' });
   if (password.length < 6) return res.status(400).json({ error: '密码至少 6 位' });
-  
+
   try {
     if (dbConnected) {
       const exists = (await dbQuery('SELECT id FROM users WHERE username = $1', [username]))[0];
@@ -155,18 +158,21 @@ app.post('/api/register', async (req, res) => {
       const hashed = await bcrypt.hash(password, 10);
       const id = require('uuid').v4();
       const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
-      await dbRun('INSERT INTO users(id,username,password,avatar,is_admin) VALUES($1,$2,$3,$4,$5)', [id, username, hashed, avatar, 0]);
+      // 新用户默认在所有现有频道禁言
+      const allRooms = await dbQuery('SELECT id FROM rooms');
+      const mutedRooms = JSON.stringify(allRooms.map(r => r.id));
+      await dbRun('INSERT INTO users(id,username,password,avatar,is_admin,muted_rooms) VALUES($1,$2,$3,$4,$5,$6)', [id, username, hashed, avatar, 0, mutedRooms]);
       const token = jwt.sign({ id, username, is_admin: 0 }, JWT_SECRET, { expiresIn: '7d' });
-      res.json({ token, user: { id, username, avatar, is_admin: 0 } });
+      res.json({ token, user: { id, username, avatar, is_admin: 0, mutedRooms: JSON.parse(mutedRooms), bannedRooms: [] } });
     } else {
-      // 内存模式
       for (const u of memUsers.values()) if (u.username === username) return res.status(400).json({ error: '用户名已被占用' });
       const id = 'user_' + Date.now();
       const hashed = await bcrypt.hash(password, 10);
       const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
-      memUsers.set(id, { id, username, password: hashed, avatar, is_admin: 0 });
+      const mutedRooms = memRooms.map(r => r.id);
+      memUsers.set(id, { id, username, password: hashed, avatar, is_admin: 0, mutedRooms, bannedRooms: [] });
       const token = jwt.sign({ id, username, is_admin: 0 }, JWT_SECRET, { expiresIn: '7d' });
-      res.json({ token, user: { id, username, avatar, is_admin: 0 } });
+      res.json({ token, user: { id, username, avatar, is_admin: 0, mutedRooms, bannedRooms: [] } });
     }
   } catch (e) {
     console.error('[Register]', e.message);
@@ -184,7 +190,9 @@ app.post('/api/login', async (req, res) => {
       const ok = await bcrypt.compare(password, user.password);
       if (!ok) return res.status(401).json({ error: '用户名或密码错误' });
       const token = jwt.sign({ id: user.id, username: user.username, is_admin: user.is_admin || 0 }, JWT_SECRET, { expiresIn: '7d' });
-      res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, is_admin: user.is_admin || 0 } });
+      const mutedRooms = JSON.parse(user.muted_rooms || '[]');
+      const bannedRooms = JSON.parse(user.banned_rooms || '[]');
+      res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, is_admin: user.is_admin || 0, mutedRooms, bannedRooms } });
     } else {
       let user = null;
       for (const u of memUsers.values()) if (u.username === username) { user = u; break; }
@@ -192,7 +200,9 @@ app.post('/api/login', async (req, res) => {
       const ok = await bcrypt.compare(password, user.password);
       if (!ok) return res.status(401).json({ error: '用户名或密码错误' });
       const token = jwt.sign({ id: user.id, username: user.username, is_admin: user.is_admin || 0 }, JWT_SECRET, { expiresIn: '7d' });
-      res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, is_admin: user.is_admin || 0 } });
+      const mutedRooms = user.mutedRooms || [];
+      const bannedRooms = user.bannedRooms || [];
+      res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar, is_admin: user.is_admin || 0, mutedRooms, bannedRooms } });
     }
   } catch (e) {
     console.error('[Login]', e.message);
@@ -210,13 +220,13 @@ app.get('/api/rooms', async (_req, res) => {
   }
 });
 
-// 用户列表
-app.get('/api/users', authMw, async (_req, res) => {
+// 用户列表（含管理员状态、禁言/封禁信息）
+app.get('/api/users', authMw, async (req, res) => {
   if (dbConnected) {
-    const rows = await dbQuery('SELECT id, username, avatar FROM users ORDER BY username ASC');
-    res.json(rows);
+    const rows = await dbQuery('SELECT id, username, avatar, is_admin, muted_rooms, banned_rooms FROM users ORDER BY is_admin DESC, username ASC');
+    res.json(rows.map(u => ({ id: u.id, username: u.username, avatar: u.avatar, is_admin: u.is_admin || 0, mutedRooms: JSON.parse(u.muted_rooms || '[]'), bannedRooms: JSON.parse(u.banned_rooms || '[]') })));
   } else {
-    res.json([...memUsers.values()].map(u => ({ id: u.id, username: u.username, avatar: u.avatar })));
+    res.json([...memUsers.values()].map(u => ({ id: u.id, username: u.username, avatar: u.avatar, is_admin: u.is_admin || 0, mutedRooms: u.mutedRooms || [], bannedRooms: u.bannedRooms || [] })));
   }
 });
 
@@ -245,10 +255,10 @@ function adminMw(req, res, next) {
 app.get('/api/admin/users', adminMw, async (req, res) => {
   try {
     if (dbConnected) {
-      const rows = await dbQuery('SELECT id, username, avatar, is_admin, created_at FROM users ORDER BY created_at DESC');
-      res.json(rows);
+      const rows = await dbQuery('SELECT id, username, avatar, is_admin, muted_rooms, banned_rooms, created_at FROM users ORDER BY is_admin DESC, created_at DESC');
+      res.json(rows.map(u => ({ id: u.id, username: u.username, avatar: u.avatar, is_admin: u.is_admin || 0, mutedRooms: JSON.parse(u.muted_rooms || '[]'), bannedRooms: JSON.parse(u.banned_rooms || '[]'), created_at: u.created_at })));
     } else {
-      res.json([...memUsers.values()].map(u => ({ id: u.id, username: u.username, avatar: u.avatar, is_admin: u.is_admin || 0, created_at: u.created_at })));
+      res.json([...memUsers.values()].map(u => ({ id: u.id, username: u.username, avatar: u.avatar, is_admin: u.is_admin || 0, mutedRooms: u.mutedRooms || [], bannedRooms: u.bannedRooms || [], created_at: u.created_at })));
     }
   } catch (e) {
     res.status(500).json({ error: '服务器错误' });
@@ -326,6 +336,64 @@ app.put('/api/admin/users/:id/admin', adminMw, async (req, res) => {
   }
 });
 
+// 禁言/解禁用户（在指定频道）
+app.put('/api/admin/users/:id/mute', adminMw, async (req, res) => {
+  const { id } = req.params;
+  const { roomId, muted } = req.body;  // muted: true=禁言, false=解禁
+  if (!roomId) return res.status(400).json({ error: 'roomId 不能为空' });
+
+  try {
+    if (dbConnected) {
+      const user = (await dbQuery('SELECT muted_rooms FROM users WHERE id=$1', [id]))[0];
+      if (!user) return res.status(404).json({ error: '用户不存在' });
+      let arr = JSON.parse(user.muted_rooms || '[]');
+      if (muted) { if (!arr.includes(roomId)) arr.push(roomId); }
+      else { arr = arr.filter(r => r !== roomId); }
+      await dbRun('UPDATE users SET muted_rooms=$1 WHERE id=$2', [JSON.stringify(arr), id]);
+      res.json({ success: true, mutedRooms: arr });
+    } else {
+      const user = memUsers.get(id);
+      if (!user) return res.status(404).json({ error: '用户不存在' });
+      if (!user.mutedRooms) user.mutedRooms = [];
+      if (muted) { if (!user.mutedRooms.includes(roomId)) user.mutedRooms.push(roomId); }
+      else { user.mutedRooms = user.mutedRooms.filter(r => r !== roomId); }
+      res.json({ success: true, mutedRooms: user.mutedRooms });
+    }
+  } catch (e) {
+    console.error('[Admin Mute]', e.message);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 封禁/解封用户（禁止进入指定频道）
+app.put('/api/admin/users/:id/ban', adminMw, async (req, res) => {
+  const { id } = req.params;
+  const { roomId, banned } = req.body;  // banned: true=封禁, false=解封
+  if (!roomId) return res.status(400).json({ error: 'roomId 不能为空' });
+
+  try {
+    if (dbConnected) {
+      const user = (await dbQuery('SELECT banned_rooms FROM users WHERE id=$1', [id]))[0];
+      if (!user) return res.status(404).json({ error: '用户不存在' });
+      let arr = JSON.parse(user.banned_rooms || '[]');
+      if (banned) { if (!arr.includes(roomId)) arr.push(roomId); }
+      else { arr = arr.filter(r => r !== roomId); }
+      await dbRun('UPDATE users SET banned_rooms=$1 WHERE id=$2', [JSON.stringify(arr), id]);
+      res.json({ success: true, bannedRooms: arr });
+    } else {
+      const user = memUsers.get(id);
+      if (!user) return res.status(404).json({ error: '用户不存在' });
+      if (!user.bannedRooms) user.bannedRooms = [];
+      if (banned) { if (!user.bannedRooms.includes(roomId)) user.bannedRooms.push(roomId); }
+      else { user.bannedRooms = user.bannedRooms.filter(r => r !== roomId); }
+      res.json({ success: true, bannedRooms: user.bannedRooms });
+    }
+  } catch (e) {
+    console.error('[Admin Ban]', e.message);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // 获取所有频道（管理员）
 app.get('/api/admin/rooms', adminMw, async (req, res) => {
   try {
@@ -390,12 +458,20 @@ io.use(async (socket, next) => {
     const p = jwt.verify(t, JWT_SECRET);
     let user = null;
     if (dbConnected) {
-      user = (await dbQuery('SELECT id, username, avatar FROM users WHERE id=$1', [p.id]))[0];
+      user = (await dbQuery('SELECT id, username, avatar, muted_rooms, banned_rooms FROM users WHERE id=$1', [p.id]))[0];
     } else {
       user = memUsers.get(p.id);
     }
     if (!user) return next(new Error('用户不存在'));
     socket.user = user;
+    // 解析禁言/封禁列表
+    if (dbConnected) {
+      socket.user.mutedRooms = JSON.parse(user.muted_rooms || '[]');
+      socket.user.bannedRooms = JSON.parse(user.banned_rooms || '[]');
+    } else {
+      socket.user.mutedRooms = user.mutedRooms || [];
+      socket.user.bannedRooms = user.bannedRooms || [];
+    }
     next();
   } catch {
     next(new Error('Token 无效'));
@@ -408,6 +484,11 @@ io.on('connection', (s) => {
   broadcastOnline();
 
   s.on('join_room', async (rid) => {
+    // 检查是否被封禁
+    if (s.user.bannedRooms && s.user.bannedRooms.includes(rid)) {
+      s.emit('error_msg', { text: '你已被禁止进入该频道，请联系管理员' });
+      return;
+    }
     s.join(rid);
     let msgs = [];
     if (dbConnected) {
@@ -424,6 +505,11 @@ io.on('connection', (s) => {
 
   s.on('send_message', async ({ roomId, content, type = 'text' }) => {
     if (!content || !content.trim()) return;
+    // 检查是否在频道被禁言
+    if (s.user.mutedRooms && s.user.mutedRooms.includes(roomId)) {
+      s.emit('error_msg', { text: '你已在该频道被禁言，请联系管理员解禁' });
+      return;
+    }
     const msg = { id: 'msg_' + Date.now(), room_id: roomId, sender_id: id, sender_name: username, content: content.trim(), type, created_at: Math.floor(Date.now() / 1000) };
     if (dbConnected) {
       await dbRun('INSERT INTO messages(id,room_id,sender_id,sender_name,content,type,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)', [msg.id, msg.room_id, msg.sender_id, msg.sender_name, msg.content, msg.type, msg.created_at]);

@@ -24,6 +24,7 @@
       --border: #e8eaf0;
       --text: #2d2d3a;
       --text-muted: #8b8fa8;
+      --admin-badge: #ff9800;
       --bubble-me: #6c63ff;
       --bubble-other: #ffffff;
       --bubble-me-text: #ffffff;
@@ -153,6 +154,18 @@
     }
     .btn-logout:hover { background: var(--danger); color: #fff; }
 
+    /* 管理员徽章 */
+    .admin-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #ff9800, #ff5722);
+      color: #fff; font-size: 10px; font-weight: 700;
+      padding: 1px 5px; border-radius: 4px; margin-left: 4px;
+      vertical-align: middle; letter-spacing: 0.5px;
+    }
+    .admin-badge::before { content: '🛡'; margin-right: 2px; font-size: 10px; }
+    .sidebar-item .admin-badge { font-size: 9px; padding: 0 4px; }
+    .msg-name .admin-badge { font-size: 9px; padding: 0 4px; }
+
     /* ===== 主区域 ===== */
     .main { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 
@@ -235,6 +248,15 @@
     }
     .send-btn:hover { background: var(--primary-dark); transform: scale(1.05); }
     .send-btn:active { transform: scale(0.95); }
+
+    /* 禁言提示 */
+    .mute-notice {
+      display: none; padding: 12px 20px; text-align: center;
+      background: rgba(255,92,92,0.08); color: var(--danger);
+      font-size: 14px; font-weight: 600; flex-shrink: 0;
+      border-top: 1px solid rgba(255,92,92,0.15);
+    }
+    .mute-notice.show { display: block; }
 
     /* ===== 欢迎页 ===== */
     .welcome-view {
@@ -393,6 +415,7 @@
         <div class="name" id="my-name">-</div>
         <div class="status">● 在线</div>
       </div>
+      <span class="admin-badge" id="my-admin-badge" style="display:none">管理员</span>
       <button class="btn-logout" title="退出登录" onclick="confirmLogout()">🚪 退出</button>
     </div>
   </div>
@@ -436,6 +459,10 @@
         oninput="autoResize(this); onTyping()"
         onkeydown="handleInputKey(event)"></textarea>
       <button class="send-btn" onclick="sendMessage()" title="发送">➤</button>
+    </div>
+    <!-- 禁言提示 -->
+    <div class="mute-notice" id="mute-notice" style="display:none">
+      🔇 你已在该频道被禁言，请联系管理员解禁
     </div>
   </div>
 </div>
@@ -541,6 +568,10 @@ async function initApp() {
   document.getElementById('my-name').textContent = currentUser.username;
   document.getElementById('my-avatar').src = currentUser.avatar || avatarUrl(currentUser.username);
 
+  // 显示管理员徽章
+  const myBadge = document.getElementById('my-admin-badge');
+  if (myBadge) myBadge.style.display = (currentUser.is_admin||0) ? '' : 'none';
+
   buildEmojiPanel();
   await loadRooms();
   connectSocket();
@@ -568,14 +599,17 @@ function renderUsers() {
   const el = document.getElementById('users-list');
   el.innerHTML = allUsers
     .filter(u => u.id !== currentUser.id)
+    // 管理员排最前
+    .sort((a, b) => (b.is_admin||0) - (a.is_admin||0))
     .map(u => {
       const isOnline = onlineUsers.some(o => o.id === u.id);
       const key = `private_${u.id}`;
       const unread = unreadMap[key] || 0;
+      const adminBadge = (u.is_admin||0) ? '<span class="admin-badge">管理员</span>' : '';
       return `
       <div class="sidebar-item" id="user-item-${u.id}" onclick="openPrivate('${u.id}','${escHtml(u.username)}')">
         <div class="${isOnline ? 'online-dot' : ''}" style="${isOnline ? '' : 'width:8px;height:8px;border-radius:50%;background:#555;flex-shrink:0'}"></div>
-        <span class="item-name">${escHtml(u.username)}</span>
+        <span class="item-name">${escHtml(u.username)}${adminBadge}</span>
         ${unread > 0 ? `<span class="badge" id="badge-private-${u.id}">${unread}</span>` : `<span class="badge" id="badge-private-${u.id}" style="display:none">0</span>`}
       </div>`;
     }).join('');
@@ -643,6 +677,13 @@ function connectSocket() {
     }
   });
 
+  // 接收错误提示（禁言/封禁等）
+  socket.on('error_msg', ({ text }) => {
+    showToast(text);
+    appendSystemMsg(text);
+    scrollToBottom();
+  });
+
   socket.on('user_typing', ({ userId, username, isTyping }) => {
     if (currentChat?.type !== 'room') return;
     const el = document.getElementById('typing-indicator');
@@ -671,6 +712,21 @@ function openRoom(id, name, desc) {
   showChatUI(`# ${name}`, desc || '频道聊天');
   clearMessages();
 
+  // 检查当前用户是否在该频道被禁言
+  const mutedRooms = currentUser.mutedRooms || [];
+  const isMuted = mutedRooms.includes(id);
+  const inputArea = document.getElementById('input-area');
+  const muteNotice = document.getElementById('mute-notice');
+
+  if (isMuted) {
+    inputArea.style.display = 'none';
+    muteNotice.style.display = '';
+    muteNotice.textContent = '🔇 你已在该频道被禁言，请联系管理员解禁';
+  } else {
+    inputArea.style.display = 'flex';
+    muteNotice.style.display = 'none';
+  }
+
   socket.emit('join_room', id);
   closeSidebar();
 }
@@ -686,6 +742,10 @@ async function openPrivate(userId, username) {
   const isOnline = onlineUsers.some(o => o.id===userId);
   showChatUI(username, isOnline ? '● 在线' : '离线');
   clearMessages();
+
+  // 私聊不受禁言影响，确保输入框可见
+  document.getElementById('input-area').style.display = 'flex';
+  document.getElementById('mute-notice').style.display = 'none';
 
   try {
     const msgs = await api(`/api/private/${userId}`);
@@ -758,13 +818,18 @@ function appendMessage(msg, type) {
   const senderName = msg.sender_name || msg.from_name || (isMe ? currentUser.username : '用户');
   const avatarSrc = isMe ? (currentUser.avatar || avatarUrl(currentUser.username)) : avatarUrl(senderName);
 
+  // 判断是否是管理员（从 allUsers 里找）
+  const sender = allUsers.find(u => u.id === senderId);
+  const isAdmin = sender ? (sender.is_admin||0) : 0;
+  const adminBadgeHtml = isAdmin ? '<span class="admin-badge">管理员</span>' : '';
+
   const div = document.createElement('div');
   div.className = `message ${isMe ? 'me' : 'other'}`;
   div.innerHTML = `
     <img class="msg-avatar" src="${avatarSrc}" alt="${escHtml(senderName)}"
          onerror="this.src='${avatarUrl(senderName)}'" />
     <div class="msg-body">
-      ${!isMe ? `<div class="msg-name">${escHtml(senderName)}</div>` : ''}
+      ${!isMe ? `<div class="msg-name">${escHtml(senderName)}${adminBadgeHtml}</div>` : ''}
       <div class="msg-bubble">${escHtml(msg.content)}</div>
       <div class="msg-time">${formatTime(ts)}</div>
     </div>
