@@ -75,6 +75,24 @@ const memRooms = [
 ];
 const memMessages = [];
 const memPrivateMessages = [];
+// 初始化内存测试账号（服务器重启后自动恢复）
+(async () => {
+  const bcrypt = require('bcryptjs');
+  const testUsers = [
+    { id: 'test_user1', username: 'test',  password: '123456' },
+    { id: 'test_user2', username: 'alice', password: '123456' },
+    { id: 'test_user3', username: 'bob',   password: '123456' },
+  ];
+  for (const u of testUsers) {
+    if (!memUsers.has(u.id)) {
+      const hashed = await bcrypt.hash(u.password, 10);
+      const avatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(u.username);
+      memUsers.set(u.id, { id: u.id, username: u.username, password: hashed, avatar });
+    }
+  }
+  console.log('[mem] 已初始化测试账号: test / alice / bob (密码均为 123456)');
+})();
+
 
 // ─── Express 中间件──────────────────────────────────────────────
 app.use(cors({ origin: '*' }));
