@@ -282,7 +282,13 @@
         border-right: none; border-bottom: 2px solid rgba(255,255,255,0.08);
         box-shadow: none; z-index: 1;
       }
-      .sidebar-header { height: 44px; }
+      .sidebar-header { height: 44px; cursor: pointer; user-select: none; }
+      .sidebar-header .collapse-icon { margin-left: auto; font-size: 14px; color: rgba(255,255,255,0.5); transition: transform 0.2s; }
+      .sidebar.collapsed .collapse-icon { transform: rotate(180deg); }
+      .sidebar.collapsed .sidebar-section,
+      .sidebar.collapsed .sidebar-item,
+      .sidebar.collapsed .sidebar-footer { display: none; }
+      .sidebar.collapsed { height: 44px !important; min-height: 44px !important; overflow: hidden; }
       .sidebar-section { padding: 8px 14px 4px; font-size: 10px; }
       .sidebar-item { padding: 7px 14px; font-size: 13px; }
       .sidebar-footer { padding: 8px 14px; }
@@ -357,9 +363,10 @@
 
   <!-- 侧边栏 -->
   <div class="sidebar" id="sidebar">
-    <div class="sidebar-header">
+    <div class="sidebar-header" onclick="toggleSidebarCollapse()">
       <span class="logo">💬</span>
       <span class="app-title">ChatApp</span>
+      <span class="collapse-icon" id="collapse-icon">▼</span>
     </div>
 
     <div class="sidebar-section">频道</div>
@@ -826,6 +833,14 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('show');
+}
+
+// 手机端侧边栏收起/展开
+function toggleSidebarCollapse() {
+  const sb = document.getElementById('sidebar');
+  const icon = document.getElementById('collapse-icon');
+  sb.classList.toggle('collapsed');
+  if (icon) icon.textContent = sb.classList.contains('collapsed') ? '▲' : '▼';
 }
 
 function toggleEmoji() {
