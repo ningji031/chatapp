@@ -137,9 +137,95 @@
     .online-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
     .sidebar-footer {
       margin-top: auto; border-top: 1px solid rgba(255,255,255,0.06);
-      padding: 14px 18px; display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px 8px; display: flex; align-items: center; gap: 8px;
+      flex-shrink: 0; flex-wrap: wrap;
+    }
+    .admin-manage-btn {
+      display: none; width: 100%; margin-top: 4px;
+      padding: 7px 0; border: 1px solid rgba(255,152,0,0.35);
+      border-radius: 6px; background: rgba(255,152,0,0.10);
+      color: #ff9800; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; letter-spacing: 0.3px;
+      text-align: center;
+    }
+    .admin-manage-btn:hover { background: rgba(255,152,0,0.20); }
+
+    /* ===== 内嵌管理面板 ===== */
+    .admin-panel-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45); z-index: 2000;
+      align-items: center; justify-content: center;
+    }
+    .admin-panel-overlay.show { display: flex; }
+    .admin-panel {
+      background: #fff; border-radius: 16px; padding: 0;
+      width: 96vw; max-width: 600px; max-height: 85vh;
+      overflow: hidden; display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    }
+    .admin-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
+    .admin-panel-header h2 { font-size: 16px; }
+    .admin-panel-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-muted); padding: 4px 8px; border-radius: 6px; }
+    .admin-panel-close:hover { background: var(--bg); }
+    .admin-panel-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .admin-panel-tab {
+      flex: 1; text-align: center; padding: 10px; font-size: 13px;
+      font-weight: 600; cursor: pointer; color: var(--text-muted);
+      border-bottom: 2px solid transparent; transition: all 0.15s;
+    }
+    .admin-panel-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: rgba(108,99,255,0.04); }
+    .admin-panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+    .admin-panel-card { margin-bottom: 14px; }
+    .admin-panel-card h3 { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600; }
+    .admin-panel-user-item, .admin-panel-room-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 8px; transition: background 0.1s;
+    }
+    .admin-panel-user-item:hover, .admin-panel-room-item:hover { background: var(--bg); }
+    .admin-panel-user-info { flex: 1; overflow: hidden; }
+    .admin-panel-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .ap-btn-sm {
+      padding: 3px 8px; border: 1px solid var(--border); border-radius: 5px;
+      font-size: 11px; cursor: pointer; background: #fff; transition: all 0.12s; white-space: nowrap;
+    }
+    .ap-btn-sm.danger { color: var(--danger); border-color: rgba(255,92,92,0.3); }
+    .ap-btn-sm.danger:hover { background: var(--danger); color: #fff; }
+    .ap-btn-sm.warn { color: var(--warning); border-color: rgba(255,152,0,0.3); }
+    .ap-btn-sm.warn:hover { background: var(--warning); color: #fff; }
+    .ap-btn-sm.success { color: var(--success); border-color: rgba(76,175,80,0.3); }
+    .ap-btn-sm.success:hover { background: var(--success); color: #fff; }
+    .ap-btn-sm.primary { color: var(--primary); border-color: rgba(108,99,255,0.3); }
+    .ap-btn-sm.primary:hover { background: var(--primary); color: #fff; }
+    .admin-panel .inline-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: flex-end; }
+    .admin-panel .inline-form input { padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 13px; outline: none; }
+    .admin-panel .inline-form input:focus { border-color: var(--primary); }
+    .admin-panel .inline-form button { padding: 6px 14px; background: var(--primary); color: #fff; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; }
+
+    /* 权限弹窗（内嵌） */
+    .ap-perm-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45); z-index: 2100;
+      align-items: center; justify-content: center;
+    }
+    .ap-perm-overlay.show { display: flex; }
+    .ap-perm-modal { background: #fff; border-radius: 16px; padding: 24px; max-width: 520px; width: 92vw; max-height: 80vh; overflow-y: auto; text-align: left; }
+    .ap-perm-modal h3 { font-size: 16px; margin-bottom: 6px; }
+    .ap-perm-modal .hint { font-size: 12px; color: var(--text-muted); margin-bottom: 18px; line-height: 1.6; }
+    .perm-section { margin-bottom: 14px; }
+    .perm-section-title { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px; }
+    .perm-room-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; transition: background 0.1s; }
+    .perm-room-item:hover { background: #f8f8fc; }
+    .perm-room-info { display: flex; flex-direction: column; gap: 1px; }
+    .perm-room-name { font-size: 14px; font-weight: 600; }
+    .perm-room-desc { font-size: 11px; color: var(--text-muted); }
+    .perm-toggles { display: flex; gap: 6px; align-items: center; }
+    .toggle-btn { padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; transition: all 0.15s; font-weight: 500; }
+    .toggle-btn.active-mute { background: rgba(255,92,92,0.15); color: var(--danger); border-color: rgba(255,92,92,0.4); }
+    .toggle-btn.active-ban  { background: rgba(255,152,0,0.15); color: var(--warning); border-color: rgba(255,152,0,0.4); }
     .user-avatar-sm {
       width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
       background: var(--primary-light); flex-shrink: 0;
@@ -421,6 +507,7 @@
       </div>
       <span class="admin-badge" id="my-admin-badge" style="display:none">管理员</span>
       <button class="btn-logout" title="退出登录" onclick="confirmLogout()">🚪 退出</button>
+      <button class="admin-manage-btn" id="admin-manage-btn" onclick="openAdminPanel()" style="display:none">🛠 管理后台</button>
     </div>
   </div>
 
@@ -473,6 +560,69 @@
 
 <!-- Toast -->
 <div id="toast"></div>
+
+<!-- 内嵌管理面板 -->
+<div class="admin-panel-overlay" id="admin-panel-overlay">
+  <div class="admin-panel">
+    <div class="admin-panel-header">
+      <h2>🛠 管理后台</h2>
+      <button class="admin-panel-close" onclick="closeAdminPanel()">✕</button>
+    </div>
+    <div class="admin-panel-tabs">
+      <div class="admin-panel-tab active" id="ap-tab-users" onclick="switchApTab('users')">👥 用户管理</div>
+      <div class="admin-panel-tab" id="ap-tab-rooms" onclick="switchApTab('rooms')">📢 频道管理</div>
+    </div>
+    <div class="admin-panel-body" id="ap-body">
+      <!-- 用户管理视图 -->
+      <div id="ap-users-view">
+        <div class="admin-panel-card">
+          <h3>➕ 添加用户</h3>
+          <div class="inline-form" style="margin-top:8px;">
+            <input type="text" id="ap-new-username" placeholder="用户名" style="width:90px" />
+            <input type="password" id="ap-new-password" placeholder="密码" style="width:80px" />
+            <label style="font-size:12px;display:flex;align-items:center;gap:3px;white-space:nowrap;"><input type="checkbox" id="ap-new-is-admin" />管理员</label>
+            <button onclick="apAddUser()">添加</button>
+          </div>
+        </div>
+        <div class="admin-panel-card">
+          <h3>用户列表</h3>
+          <div id="ap-users-list" style="margin-top:8px;"></div>
+        </div>
+      </div>
+      <!-- 频道管理视图 -->
+      <div id="ap-rooms-view" style="display:none">
+        <div class="admin-panel-card">
+          <h3>➕ 添加频道</h3>
+          <div class="inline-form" style="margin-top:8px;">
+            <input type="text" id="ap-new-room-id" placeholder="ID" style="width:70px" />
+            <input type="text" id="ap-new-room-name" placeholder="名称" style="width:90px" />
+            <input type="text" id="ap-new-room-desc" placeholder="描述" style="width:100px" />
+            <button onclick="apAddRoom()">添加</button>
+          </div>
+        </div>
+        <div class="admin-panel-card">
+          <h3>频道列表</h3>
+          <div id="ap-rooms-list" style="margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 频道权限弹窗（内嵌） -->
+<div class="ap-perm-overlay" id="ap-perm-modal">
+  <div class="ap-perm-modal">
+    <h3 id="ap-perm-modal-title">频道权限管理</h3>
+    <p class="ap-perm-hint">
+      🔇 <b>禁止发言</b>：用户可进入频道，但无法发送消息<br>
+      🚫 <b>禁止进入</b>：用户无法进入该频道（不影响登录和其他频道）
+    </p>
+    <div id="ap-perm-list"></div>
+    <div style="text-align:center;margin-top:18px;">
+      <button class="ap-btn-sm success" onclick="apClosePermModal()" style="padding:7px 22px;border:none;border-radius:6px;cursor:pointer;font-size:13px;">关闭</button>
+    </div>
+  </div>
+</div>
 
 <!-- Socket.io 客户端（从后端服务获取） -->
 <script src="/socket.io/socket.io.js"></script>
@@ -575,6 +725,10 @@ async function initApp() {
   // 显示管理员徽章
   const myBadge = document.getElementById('my-admin-badge');
   if (myBadge) myBadge.style.display = (currentUser.is_admin||0) ? '' : 'none';
+
+  // 显示管理员按钮
+  const adminBtn = document.getElementById('admin-manage-btn');
+  if (adminBtn) adminBtn.style.display = (currentUser.is_admin||0) ? '' : 'none';
 
   buildEmojiPanel();
   await loadRooms();
@@ -993,6 +1147,196 @@ function formatDate(ts) {
   if (d.toDateString() === today.toDateString()) return '今天';
   const y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
   return `${y}年${m}月${day}日`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  管理面板（管理员）
+// ═══════════════════════════════════════════════════════════════
+function openAdminPanel() {
+  document.getElementById('admin-panel-overlay').classList.add('show');
+  switchApTab('users');
+  apLoadUsers();
+  apLoadRooms();
+}
+
+function closeAdminPanel() {
+  document.getElementById('admin-panel-overlay').classList.remove('show');
+}
+
+function switchApTab(tab) {
+  document.getElementById('ap-tab-users').classList.toggle('active', tab === 'users');
+  document.getElementById('ap-tab-rooms').classList.toggle('active', tab === 'rooms');
+  document.getElementById('ap-users-view').style.display = tab === 'users' ? '' : 'none';
+  document.getElementById('ap-rooms-view').style.display = tab === 'rooms' ? '' : 'none';
+  if (tab === 'users') apLoadUsers();
+  else apLoadRooms();
+}
+
+// ── 用户管理
+async function apLoadUsers() {
+  try {
+    const users = await api('/api/admin/users', 'GET');
+    document.getElementById('ap-users-list').innerHTML = users.map(u => {
+      const isMe = u.id === currentUser.id;
+      const mutedRooms = u.mutedRooms || [];
+      const bannedRooms = u.bannedRooms || [];
+      const permHint = (mutedRooms.length || bannedRooms.length)
+        ? `🔇${mutedRooms.length} 🚫${bannedRooms.length}` : '✅';
+      return `
+        <div class="admin-panel-user-item">
+          <img src="${u.avatar || ''}" style="width:28px;height:28px;border-radius:50%;background:#eee;object-fit:cover" onerror="this.style.display='none'" />
+          <div class="admin-panel-user-info">
+            <span style="font-size:13px;font-weight:600;">${escHtml(u.username)}</span>
+            ${u.is_admin ? '<span class="admin-badge" style="font-size:9px;padding:0 4px;">管理员</span>' : ''}
+            <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">${permHint}</span>
+          </div>
+          <div class="admin-panel-actions">
+            ${!isMe ? `
+              <button class="ap-btn-sm ${u.is_admin ? 'warn' : 'success'}" onclick="apToggleAdmin('${u.id}',${u.is_admin ? 1 : 0})">
+                ${u.is_admin ? '取消管理' : '设管理'}
+              </button>
+              <button class="ap-btn-sm primary" onclick="apOpenPerm('${u.id}','${escHtml(u.username)}')">权限</button>
+              <button class="ap-btn-sm danger" onclick="apDeleteUser('${u.id}','${escHtml(u.username)}')">删除</button>
+            ` : '<span style="font-size:11px;color:#aaa;">我</span>'}
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function apAddUser() {
+  const username = document.getElementById('ap-new-username').value.trim();
+  const password = document.getElementById('ap-new-password').value;
+  const is_admin = document.getElementById('ap-new-is-admin').checked;
+  if (!username || !password) return showToast('请输入用户名和密码');
+  try {
+    await api('/api/admin/users', 'POST', { username, password, is_admin });
+    showToast('✅ 用户添加成功');
+    document.getElementById('ap-new-username').value = '';
+    document.getElementById('ap-new-password').value = '';
+    document.getElementById('ap-new-is-admin').checked = false;
+    apLoadUsers();
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function apToggleAdmin(id, currentIsAdmin) {
+  try {
+    await api(`/api/admin/users/${id}/admin`, 'PUT', { is_admin: currentIsAdmin ? 0 : 1 });
+    showToast('✅ 权限已更新');
+    apLoadUsers();
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+let apPendingDeleteUserId = null;
+async function apDeleteUser(id, name) {
+  if (!confirm(`确定要删除用户「${name}」吗？此操作不可撤销。`)) return;
+  try {
+    await api(`/api/admin/users/${id}`, 'DELETE');
+    showToast('✅ 用户已删除');
+    apLoadUsers();
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+// ── 频道权限弹窗（内嵌）
+let apPermUserId = null;
+async function apOpenPerm(userId, username) {
+  apPermUserId = userId;
+  document.getElementById('ap-perm-modal-title').textContent = `频道权限 — ${username}`;
+  document.getElementById('ap-perm-modal').classList.add('show');
+  try {
+    const [user, rooms] = await Promise.all([
+      api('/api/admin/users', 'GET').then(users => users.find(u => u.id === userId)),
+      api('/api/admin/rooms', 'GET')
+    ]);
+    const mutedRooms = user?.mutedRooms || [];
+    const bannedRooms = user?.bannedRooms || [];
+    document.getElementById('ap-perm-list').innerHTML = rooms.map(r => {
+      const isMuted = mutedRooms.includes(r.id);
+      const isBanned = bannedRooms.includes(r.id);
+      return `
+        <div class="perm-room-item">
+          <div class="perm-room-info">
+            <span class="perm-room-name">${escHtml(r.name)}</span>
+            <span class="perm-room-desc">${escHtml(r.description || '')} <code>${escHtml(r.id)}</code></span>
+          </div>
+          <div class="perm-toggles">
+            <button class="toggle-btn ${isMuted ? 'active-mute' : ''}"
+              onclick="apToggleMute('${userId}','${r.id}',${isMuted})">
+              ${isMuted ? '🔇 禁言' : '✅ 发言'}
+            </button>
+            <button class="toggle-btn ${isBanned ? 'active-ban' : ''}"
+              onclick="apToggleBan('${userId}','${r.id}',${isBanned})">
+              ${isBanned ? '🚫 封禁' : '✅ 进入'}
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function apToggleMute(userId, roomId, currentMuted) {
+  try {
+    await api(`/api/admin/users/${userId}/mute`, 'PUT', { roomId, muted: !currentMuted });
+    showToast('✅ 禁言状态已更新');
+    apOpenPerm(userId, '');
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function apToggleBan(userId, roomId, currentBanned) {
+  try {
+    await api(`/api/admin/users/${userId}/ban`, 'PUT', { roomId, banned: !currentBanned });
+    showToast('✅ 封禁状态已更新');
+    apOpenPerm(userId, '');
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+function apClosePermModal() {
+  document.getElementById('ap-perm-modal').classList.remove('show');
+  apPermUserId = null;
+}
+
+// ── 频道管理
+async function apLoadRooms() {
+  try {
+    const rooms = await api('/api/admin/rooms', 'GET');
+    document.getElementById('ap-rooms-list').innerHTML = rooms.map(r => `
+      <div class="admin-panel-room-item">
+        <div>
+          <span style="font-size:13px;font-weight:600;">${escHtml(r.name)}</span>
+          <span style="font-size:11px;color:var(--text-muted);margin-left:6px;"><code>${escHtml(r.id)}</code></span>
+          ${r.description ? `<div style="font-size:11px;color:var(--text-muted);">${escHtml(r.description)}</div>` : ''}
+        </div>
+        <div class="admin-panel-actions">
+          <button class="ap-btn-sm danger" onclick="apDeleteRoom('${escHtml(r.id)}','${escHtml(r.name)}')">删除</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function apAddRoom() {
+  const id = document.getElementById('ap-new-room-id').value.trim();
+  const name = document.getElementById('ap-new-room-name').value.trim();
+  const description = document.getElementById('ap-new-room-desc').value.trim();
+  if (!id || !name) return showToast('请输入频道 ID 和名称');
+  try {
+    await api('/api/admin/rooms', 'POST', { id, name, description });
+    showToast('✅ 频道添加成功');
+    document.getElementById('ap-new-room-id').value = '';
+    document.getElementById('ap-new-room-name').value = '';
+    document.getElementById('ap-new-room-desc').value = '';
+    apLoadRooms();
+    loadRooms(); // 刷新侧边栏
+  } catch(e) { showToast('❌ ' + e.message); }
+}
+
+async function apDeleteRoom(id, name) {
+  if (!confirm(`确定要删除频道「${name}」吗？聊天记录也会一并删除。`)) return;
+  try {
+    await api(`/api/admin/rooms/${encodeURIComponent(id)}`, 'DELETE');
+    showToast('✅ 频道已删除');
+    apLoadRooms();
+    loadRooms();
+  } catch(e) { showToast('❌ ' + e.message); }
 }
 
 // ═══════════════════════════════════════════════════════════════
