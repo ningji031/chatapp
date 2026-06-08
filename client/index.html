@@ -952,14 +952,14 @@ function openRoom(id, name, desc) {
 }
 
 async function openPrivate(userId, username) {
-  if (currentChat?.type==='private' && currentChat.id===userId) { closeSidebar(); return; }
+  if (currentChat?.type==='private' && currentChat.id==userId) { closeSidebar(); return; }
   if (currentChat?.type==='room') socket.emit('leave_room', currentChat.id);
 
   currentChat = { type: 'private', id: userId, name: username };
   setActiveItem(`user-item-${userId}`);
   clearUnread(`private_${userId}`, `private-${userId}`);
-  const u = allUsers.find(u => u.id===userId);
-  const isOnline = onlineUsers.some(o => o.id===userId);
+  const u = allUsers.find(u => u.id == userId);
+  const isOnline = onlineUsers.some(o => o.id == userId);
   showChatUI(username, isOnline ? '● 在线' : '离线');
   clearMessages();
 
@@ -1033,13 +1033,13 @@ function appendMessage(msg, type) {
     area.appendChild(div);
   }
 
-  const isMe = msg.sender_id === currentUser.id || msg.from_id === currentUser.id;
+  const isMe = msg.sender_id == currentUser.id || msg.from_id == currentUser.id;
   const senderId = msg.sender_id || msg.from_id;
   const senderName = msg.sender_name || msg.from_name || (isMe ? currentUser.username : '用户');
   const avatarSrc = isMe ? (currentUser.avatar || avatarUrl(currentUser.username)) : avatarUrl(senderName);
 
   // 判断是否是管理员（从 allUsers 里找）
-  const sender = allUsers.find(u => u.id === senderId);
+  const sender = allUsers.find(u => u.id == senderId);
   const isAdmin = sender ? (sender.is_admin||0) : 0;
   const adminBadgeHtml = isAdmin ? '<span class="admin-badge">管理员</span>' : '';
 
@@ -1364,7 +1364,7 @@ let uaTargetUserId = null;
 let uaTargetUsername = '';
 
 function showUserActionPopup(userId, username, event) {
-  uaTargetUserId = userId;
+  uaTargetUserId = String(userId);
   uaTargetUsername = username;
   const popup = document.getElementById('user-action-popup');
   const hint  = document.getElementById('ua-hint');
