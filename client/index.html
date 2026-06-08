@@ -1419,19 +1419,20 @@ function hideUserActionPopup() {
 
 async function uaToggleMute() {
   if (!uaTargetUserId) return;
+  const uid = uaTargetUserId, uname = uaTargetUsername;
   // 不在频道中时，打开全权限管理
   if (currentChat?.type !== 'room') {
     hideUserActionPopup();
-    apOpenPerm(uaTargetUserId, uaTargetUsername);
+    apOpenPerm(uid, uname);
     return;
   }
   const rid = currentChat.id;
   try {
     const users = await api('/api/admin/users', 'GET');
-    const u = users.find(x => x.id == uaTargetUserId);
+    const u = users.find(x => x.id == uid);
     const mutedRooms = u?.mutedRooms || [];
     const isMuted = mutedRooms.includes(rid);
-    await api(`/api/admin/users/${uaTargetUserId}/mute`, 'PUT', { roomId: rid, muted: !isMuted });
+    await api(`/api/admin/users/${uid}/mute`, 'PUT', { roomId: rid, muted: !isMuted });
     showToast(`✅ 已${isMuted ? '开启说话' : '禁止发言'}`);
     hideUserActionPopup();
     renderUsers();
@@ -1440,19 +1441,20 @@ async function uaToggleMute() {
 
 async function uaToggleBan() {
   if (!uaTargetUserId) return;
+  const uid = uaTargetUserId, uname = uaTargetUsername;
   // 不在频道中时，打开全权限管理
   if (currentChat?.type !== 'room') {
     hideUserActionPopup();
-    apOpenPerm(uaTargetUserId, uaTargetUsername);
+    apOpenPerm(uid, uname);
     return;
   }
   const rid = currentChat.id;
   try {
     const users = await api('/api/admin/users', 'GET');
-    const u = users.find(x => x.id == uaTargetUserId);
+    const u = users.find(x => x.id == uid);
     const bannedRooms = u?.bannedRooms || [];
     const isBanned = bannedRooms.includes(rid);
-    await api(`/api/admin/users/${uaTargetUserId}/ban`, 'PUT', { roomId: rid, banned: !isBanned });
+    await api(`/api/admin/users/${uid}/ban`, 'PUT', { roomId: rid, banned: !isBanned });
     showToast(`✅ 已${isBanned ? '解除封禁' : '禁止进入'}`);
     hideUserActionPopup();
     renderUsers();
@@ -1460,13 +1462,15 @@ async function uaToggleBan() {
 }
 
 function uaOpenAllPerm() {
+  const uid = uaTargetUserId, uname = uaTargetUsername;
   hideUserActionPopup();
-  if (uaTargetUserId) apOpenPerm(uaTargetUserId, uaTargetUsername);
+  if (uid) apOpenPerm(uid, uname);
 }
 
 function uaOpenPrivate() {
+  const uid = uaTargetUserId, uname = uaTargetUsername;
   hideUserActionPopup();
-  if (uaTargetUserId) openPrivate(uaTargetUserId, uaTargetUsername);
+  if (uid) openPrivate(uid, uname);
 }
 
 // 点击空白区域关闭弹窗
